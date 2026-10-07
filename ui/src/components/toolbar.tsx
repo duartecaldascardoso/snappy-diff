@@ -6,6 +6,7 @@ import {
   FileUp,
   Moon,
   PanelLeft,
+  Pilcrow,
   RotateCw,
   Rows2,
   Sun,
@@ -13,7 +14,7 @@ import {
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
-import type { Entry, Source } from '@/lib/diff'
+import { type Entry, type Source, WORKTREE } from '@/lib/diff'
 import { installedFonts } from '@/lib/fonts'
 
 type GitSource = Extract<Source, { kind: 'git' }>
@@ -28,9 +29,13 @@ function RefPicker({
   onLoad: (source: Source) => void
 }) {
   // The CLI accepts any revision, so the current pair may not be a listed ref.
-  const options = useMemo(() => [...new Set([...refs, source.base, source.head])], [refs, source])
+  const options = useMemo(
+    () => [...new Set([...refs, source.base, source.head])].filter((r) => r !== WORKTREE),
+    [refs, source],
+  )
   const select = (side: 'base' | 'head') => (
     <NativeSelect aria-label={side} value={source[side]} onChange={(e) => onLoad({ ...source, [side]: e.target.value })}>
+      {side === 'head' && <option value={WORKTREE}>Working tree</option>}
       {options.map((r) => (
         <option key={r}>{r}</option>
       ))}
@@ -42,13 +47,22 @@ function RefPicker({
       <Button
         size="icon"
         title="Swap base and head"
-        onClick={() => onLoad({ kind: 'git', base: source.head, head: source.base })}
+        disabled={source.head === WORKTREE}
+        onClick={() => onLoad({ ...source, base: source.head, head: source.base })}
       >
         <ArrowLeftRight />
       </Button>
       {select('head')}
       <Button size="icon" title="Reload" onClick={() => onLoad(source)}>
         <RotateCw />
+      </Button>
+      <Button
+        size="icon"
+        title="Ignore whitespace"
+        aria-pressed={!!source.ignoreWhitespace}
+        onClick={() => onLoad({ ...source, ignoreWhitespace: !source.ignoreWhitespace })}
+      >
+        <Pilcrow />
       </Button>
     </>
   )

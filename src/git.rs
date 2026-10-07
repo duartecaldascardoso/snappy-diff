@@ -1,7 +1,10 @@
 //! Thin wrappers around the `git` CLI. Shelling out is as fast as git itself
 //! and keeps the binary free of a bundled git implementation.
 
-use std::{path::Path, process::Stdio};
+use std::{
+    path::{Component, Path},
+    process::Stdio,
+};
 
 use tokio::process::Command;
 
@@ -73,13 +76,35 @@ pub async fn refs(repo: &Path) -> Vec<String> {
 }
 
 /// What `head` changed since it forked from `base`, like a pull request.
+/// Without a `head`, compares against the working tree (tracked files only).
 /// `--full-index` gives the UI blob ids so it can lazily fetch whole files.
-pub async fn diff(repo: &Path, base: &str, head: &str) -> Result<Vec<u8>, String> {
-    if base.starts_with('-') || head.starts_with('-') {
+pub async fn diff(repo: &Path, base: &str, head: Option<&str>, ignore_whitespace: bool) -> Result<Vec<u8>, String> {
+    if base.starts_with('-') || head.is_some_and(|h| h.starts_with('-')) {
         return Err("invalid ref".into());
     }
-    let range = format!("{base}...{head}");
-    run(repo, &["diff", "--no-color", "--no-ext-diff", "--full-index", "-M", &range, "--"]).await
+    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "--full-index", "-M"];
+    if ignore_whitespace {
+        args.push("-w");
+    }
+    let range;
+    match head {
+        Some(head) => {
+            range = format!("{base}...{head}");
+            args.push(&range);
+        }
+        None => args.extend(["--merge-base", base]),
+    }
+    args.push("--");
+    run(repo, &args).await
+}
+
+/// A file as it currently is on disk; uncommitted contents have no blob yet.
+pub async fn worktree_file(repo: &Path, path: &str) -> Result<Vec<u8>, String> {
+    let relative = Path::new(path);
+    if !relative.components().all(|c| matches!(c, Component::Normal(_))) {
+        return Err("invalid path".into());
+    }
+    tokio::fs::read(repo.join(relative)).await.map_err(|e| e.to_string())
 }
 
 pub async fn blob(repo: &Path, oid: &str) -> Result<Vec<u8>, String> {

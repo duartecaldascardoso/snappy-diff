@@ -32,7 +32,12 @@ export function useDiff() {
         const params = new URLSearchParams(location.search)
         if (meta.mode === 'patch') load({ kind: 'patch', name: meta.patchName ?? 'patch' })
         else if (meta.mode === 'git')
-          load({ kind: 'git', base: params.get('base') ?? meta.base, head: params.get('head') ?? meta.head })
+          load({
+            kind: 'git',
+            base: params.get('base') ?? meta.base,
+            head: params.get('head') ?? meta.head,
+            ignoreWhitespace: params.has('w'),
+          })
         else setState({ entries: [], loading: false })
       })
       .catch((e) => setState({ entries: [], loading: false, error: String(e) }))

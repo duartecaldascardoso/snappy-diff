@@ -26,6 +26,7 @@ pub struct App {
     /// Name and contents of a patch given on the command line.
     pub patch: Option<(String, String)>,
     pub base: String,
+    /// Empty means the working tree.
     pub head: String,
 }
 
@@ -42,7 +43,15 @@ struct Meta {
 #[derive(Deserialize)]
 struct Range {
     base: Option<String>,
+    /// Empty means the working tree.
     head: Option<String>,
+    /// Ignore whitespace changes.
+    w: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct FilePath {
+    path: String,
 }
 
 pub fn router(app: App) -> Router {
@@ -50,6 +59,7 @@ pub fn router(app: App) -> Router {
         .route("/api/meta", get(meta))
         .route("/api/diff", get(diff))
         .route("/api/blob/{oid}", get(blob))
+        .route("/api/file", get(file))
         .fallback(asset)
         .with_state(Arc::new(app))
 }
@@ -80,8 +90,11 @@ async fn meta(State(app): State<Arc<App>>) -> Json<Meta> {
 /// With `?base=&head=`, diffs the two refs; without, returns the CLI's patch.
 async fn diff(State(app): State<Arc<App>>, Query(range): Query<Range>) -> Response {
     let result = match (range, &app.repo, &app.patch) {
-        (Range { base: Some(base), head: Some(head) }, Some(repo), _) => git::diff(repo, &base, &head).await,
-        (Range { base: None, head: None }, _, Some((_, patch))) => Ok(patch.clone().into_bytes()),
+        (Range { base: Some(base), head: Some(head), w }, Some(repo), _) => {
+            let head = (!head.is_empty()).then_some(head.as_str());
+            git::diff(repo, &base, head, w.is_some()).await
+        }
+        (Range { base: None, head: None, .. }, _, Some((_, patch))) => Ok(patch.clone().into_bytes()),
         _ => Err("nothing to diff".into()),
     };
     match result {
@@ -97,6 +110,16 @@ async fn blob(State(app): State<Arc<App>>, Path(oid): Path<String>) -> Response 
     match git::blob(repo, &oid).await {
         // A blob never changes for a given id.
         Ok(contents) => ([(header::CACHE_CONTROL, IMMUTABLE)], text(StatusCode::OK, contents)).into_response(),
+        Err(e) => text(StatusCode::NOT_FOUND, e),
+    }
+}
+
+async fn file(State(app): State<Arc<App>>, Query(FilePath { path }): Query<FilePath>) -> Response {
+    let Some(repo) = &app.repo else {
+        return text(StatusCode::NOT_FOUND, "not a git repository");
+    };
+    match git::worktree_file(repo, &path).await {
+        Ok(contents) => text(StatusCode::OK, contents),
         Err(e) => text(StatusCode::NOT_FOUND, e),
     }
 }

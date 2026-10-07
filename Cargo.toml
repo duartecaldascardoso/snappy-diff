@@ -6,7 +6,7 @@ description = "An insanely fast side-by-side diff viewer for git branches and pa
 
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "process", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "process", "io-util", "fs"] }
 clap = { version = "4", features = ["derive"] }
 rust-embed = "8"
 mime_guess = "2"

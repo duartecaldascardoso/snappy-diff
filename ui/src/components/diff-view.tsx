@@ -1,7 +1,7 @@
-import { CodeView, type CodeViewHandle, type CodeViewItem } from '@pierre/diffs/react'
+import { CodeView, type CodeViewHandle, type CodeViewItem, type FileDiffContentsLoader } from '@pierre/diffs/react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
-import { type Entry, loadBlobs, THEME } from '@/lib/diff'
+import { type Entry, THEME } from '@/lib/diff'
 
 export type DiffViewHandle = { scrollToFile: (id: string) => void }
 
@@ -10,18 +10,21 @@ export function DiffView({
   entries,
   collapsed,
   onToggle,
+  onActiveChange,
   diffStyle,
   dark,
-  expandable,
+  loadFiles,
 }: {
   ref: Ref<DiffViewHandle>
   entries: Entry[]
   collapsed: ReadonlySet<string>
   onToggle: (id: string) => void
+  /** Called with the index of the file at the top of the viewport. */
+  onActiveChange: (index: number) => void
   diffStyle: 'split' | 'unified'
   dark: boolean
-  /** Whether full files can be fetched to expand folded lines. */
-  expandable: boolean
+  /** Fetches full files so folded lines can be expanded. */
+  loadFiles?: FileDiffContentsLoader
 }) {
   const view = useRef<CodeViewHandle<undefined, undefined>>(null)
 
@@ -52,10 +55,25 @@ export function DiffView({
       hunkSeparators: 'line-info' as const,
       // Unchanged lines stay folded until asked for.
       expandUnchanged: false,
-      loadDiffFiles: expandable ? loadBlobs : undefined,
+      loadDiffFiles: loadFiles,
       stickyHeaders: true,
     }),
-    [dark, diffStyle, expandable],
+    [dark, diffStyle, loadFiles],
+  )
+
+  const onScroll = useCallback(
+    (scrollTop: number, viewer: { getTopForItem(id: string): number | undefined }) => {
+      // Binary search for the last file starting at or above the viewport top.
+      let lo = 0
+      let hi = entries.length - 1
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1
+        if ((viewer.getTopForItem(entries[mid].id) ?? Infinity) <= scrollTop + 1) lo = mid
+        else hi = mid - 1
+      }
+      onActiveChange(lo)
+    },
+    [entries, onActiveChange],
   )
 
   const renderHeaderPrefix = useCallback(
@@ -77,6 +95,7 @@ export function DiffView({
       ref={view}
       items={items}
       options={options}
+      onScroll={onScroll}
       renderHeaderPrefix={renderHeaderPrefix}
       className="h-full overflow-auto"
     />

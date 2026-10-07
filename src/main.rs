@@ -16,6 +16,7 @@ use tokio::net::TcpListener;
 ///   snappy-diff                 diff the default branch against HEAD
 ///   snappy-diff main            diff main...HEAD
 ///   snappy-diff main feature    diff main...feature
+///   snappy-diff -w              diff the default branch against uncommitted changes
 ///   snappy-diff change.diff     view a .diff/.patch file
 ///   git diff | snappy-diff -    view a diff from stdin
 #[derive(Parser)]
@@ -29,6 +30,9 @@ struct Cli {
     /// Port to listen on (falls back to a free one if taken)
     #[arg(short, long, default_value_t = 4747)]
     port: u16,
+    /// Compare against the working tree (uncommitted changes) instead of a head ref
+    #[arg(short, long)]
+    worktree: bool,
     /// Don't open the browser
     #[arg(long)]
     no_open: bool,
@@ -79,6 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => git::default_base(repo).await,
         };
         head = match cli.args.get(1) {
+            _ if cli.worktree => String::new(),
             Some(head) => head.clone(),
             None => git::current_branch(repo).await,
         };

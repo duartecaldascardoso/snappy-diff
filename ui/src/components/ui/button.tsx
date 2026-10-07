@@ -20,7 +20,7 @@ export function Button({
     <button
       type="button"
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-md text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0",
+        "inline-flex shrink-0 items-center justify-center rounded-md text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-pressed:bg-accent aria-pressed:text-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0",
         variants[variant],
         sizes[size],
         className,

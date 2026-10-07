@@ -18,10 +18,11 @@ cargo install --path .
 ```bash
 snappy-diff                 # default branch vs. current branch
 snappy-diff main feature    # main...feature
+snappy-diff -w              # default branch vs. uncommitted changes
 snappy-diff change.diff     # a .diff / .patch file
 git diff | snappy-diff -    # a diff from stdin
 ```
 
 You can also drop or paste a diff into the page.
 
-`/` searches files, `⌘B` toggles the sidebar.
+`/` searches files, `j` / `k` jump between files, `⌘B` toggles the sidebar.

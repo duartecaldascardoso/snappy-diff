@@ -10,15 +10,20 @@ export type Meta = {
   patchName: string | null
 }
 
+/** As a head, compares against uncommitted changes instead of a ref. */
+export const WORKTREE = ''
+
 export type Source =
-  | { kind: 'git'; base: string; head: string }
+  | { kind: 'git'; base: string; head: string; ignoreWhitespace?: boolean }
   /** `text` is absent when the patch was handed to the CLI and lives on the server. */
   | { kind: 'patch'; name: string; text?: string }
 
 export type Entry = { id: string; rev: number; file: FileDiffMetadata; add: number; del: number }
 
 export const gitQuery = (s: Source) =>
-  s.kind === 'git' ? `?${new URLSearchParams({ base: s.base, head: s.head })}` : ''
+  s.kind === 'git'
+    ? `?${new URLSearchParams({ base: s.base, head: s.head, ...(s.ignoreWhitespace && { w: '1' }) })}`
+    : ''
 
 export async function fetchPatch(source: Source): Promise<string> {
   if (source.kind === 'patch' && source.text != null) return source.text
@@ -47,17 +52,26 @@ export function parsePatch(text: string, rev: number): Entry[] {
   )
 }
 
-async function fetchBlob(oid?: string) {
-  if (!oid || /^0+$/.test(oid)) return null
-  const res = await fetch(`/api/blob/${oid}`)
+const exists = (oid?: string): oid is string => !!oid && !/^0+$/.test(oid)
+
+async function fetchText(url: string) {
+  const res = await fetch(url)
   if (!res.ok) throw new Error(await res.text())
   return res.text()
 }
 
-/** Fetches both sides of a file so its folded lines can be expanded. */
-export async function loadBlobs(file: FileDiffMetadata) {
-  const [prev, next] = await Promise.all([fetchBlob(file.prevObjectId), fetchBlob(file.newObjectId)])
-  const newFile = { name: file.name, contents: next ?? '' }
+/**
+ * Fetches both sides of a file so its folded lines can be expanded. Uncommitted
+ * contents have no blob yet, so a working-tree head is read from disk.
+ */
+export const fileLoader = (worktree: boolean) => async (file: FileDiffMetadata) => {
+  const [prev, next] = await Promise.all([
+    exists(file.prevObjectId) ? fetchText(`/api/blob/${file.prevObjectId}`) : null,
+    !exists(file.newObjectId)
+      ? ''
+      : fetchText(worktree ? `/api/file?${new URLSearchParams({ path: file.name })}` : `/api/blob/${file.newObjectId}`),
+  ])
+  const newFile = { name: file.name, contents: next }
   return prev == null
     ? { oldFile: null, newFile }
     : { oldFile: { name: file.prevName ?? file.name, contents: prev }, newFile }
