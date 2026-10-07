@@ -10,10 +10,11 @@ import {
   Rows2,
   Sun,
 } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { Entry, Source } from '@/lib/diff'
+import { installedFonts } from '@/lib/fonts'
 
 type GitSource = Extract<Source, { kind: 'git' }>
 
@@ -53,6 +54,19 @@ function RefPicker({
   )
 }
 
+function FontPicker({ font, onChange }: { font: string; onChange: (font: string) => void }) {
+  const [fonts] = useState(installedFonts)
+  if (!fonts.length) return null
+  return (
+    <NativeSelect aria-label="Code font" title="Code font" value={font} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Default font</option>
+      {fonts.map((f) => (
+        <option key={f}>{f}</option>
+      ))}
+    </NativeSelect>
+  )
+}
+
 function Stats({ entries, ms }: { entries: Entry[]; ms?: number }) {
   const { add, del } = useMemo(
     () => entries.reduce((t, e) => ({ add: t.add + e.add, del: t.del + e.del }), { add: 0, del: 0 }),
@@ -83,6 +97,8 @@ export function Toolbar({
   onToggleDiffStyle,
   dark,
   onToggleDark,
+  font,
+  onFontChange,
 }: {
   source?: Source
   refs: string[]
@@ -97,13 +113,15 @@ export function Toolbar({
   onToggleDiffStyle: () => void
   dark: boolean
   onToggleDark: () => void
+  font: string
+  onFontChange: (font: string) => void
 }) {
   return (
     <header className="flex h-11 shrink-0 items-center gap-2 border-b px-2">
       <Button size="icon" title="Toggle sidebar (⌘B)" onClick={onToggleSidebar}>
         <PanelLeft />
       </Button>
-      <span className="mr-1 font-semibold tracking-tight">snappy diff</span>
+      <span className="mr-1 font-semibold tracking-tight whitespace-nowrap">snappy diff</span>
 
       {source?.kind === 'git' && <RefPicker source={source} refs={refs} onLoad={onLoad} />}
       {source?.kind === 'patch' && (
@@ -112,6 +130,7 @@ export function Toolbar({
 
       <div className="ml-auto flex items-center gap-1">
         <Stats entries={entries} ms={ms} />
+        <FontPicker font={font} onChange={onFontChange} />
         <Button size="icon" title={allCollapsed ? 'Expand all files' : 'Collapse all files'} onClick={onToggleAll}>
           {allCollapsed ? <ChevronsUpDown /> : <ChevronsDownUp />}
         </Button>

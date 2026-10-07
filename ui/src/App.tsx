@@ -1,6 +1,6 @@
 import { WorkerPoolContextProvider } from '@pierre/diffs/react'
 import DiffWorker from '@pierre/diffs/worker/worker.js?worker'
-import { useCallback, useRef } from 'react'
+import { type CSSProperties, useCallback, useRef } from 'react'
 import { DiffView, type DiffViewHandle } from '@/components/diff-view'
 import { EmptyState } from '@/components/empty-state'
 import { Sidebar } from '@/components/sidebar'
@@ -27,6 +27,7 @@ export default function App() {
   const [diffStyle, setDiffStyle] = usePersisted<'split' | 'unified'>('diffStyle', 'split')
   const [sidebar, setSidebar] = usePersisted<'open' | 'closed'>('sidebar', 'open')
   const [dark, toggleDark] = useTheme()
+  const [font, setFont] = usePersisted<string>('font', '')
   const view = useRef<DiffViewHandle>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -61,13 +62,18 @@ export default function App() {
           onToggleDiffStyle={() => setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')}
           dark={dark}
           onToggleDark={toggleDark}
+          font={font}
+          onFontChange={setFont}
         />
 
         <div className="flex min-h-0 flex-1">
           <aside className={cn('w-72 shrink-0 border-r', sidebar === 'closed' && 'hidden')}>
             <Sidebar entries={entries} onSelect={jumpToFile} />
           </aside>
-          <main className="min-w-0 flex-1">
+          <main
+            className="min-w-0 flex-1"
+            style={font ? ({ '--diffs-font-family': `"${font}", monospace` } as CSSProperties) : undefined}
+          >
             {entries.length > 0 ? (
               <DiffView
                 ref={view}
