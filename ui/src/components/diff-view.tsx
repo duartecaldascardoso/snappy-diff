@@ -29,7 +29,16 @@ export function DiffView({
   const view = useRef<CodeViewHandle<undefined, undefined>>(null)
 
   useImperativeHandle(ref, () => ({
-    scrollToFile: (id) => view.current?.scrollTo({ type: 'item', id, align: 'start', behavior: 'instant' }),
+    scrollToFile: (id) => {
+      // Wrapped lines make the height of unrendered files an estimate, so
+      // re-aim for a few frames while the files above get measured.
+      let frames = 4
+      const aim = () => {
+        view.current?.scrollTo({ type: 'item', id, align: 'start', behavior: 'instant' })
+        if (--frames) requestAnimationFrame(aim)
+      }
+      aim()
+    },
   }))
 
   // A freshly loaded diff starts at the top.
@@ -52,6 +61,7 @@ export function DiffView({
       theme: THEME,
       themeType: dark ? ('dark' as const) : ('light' as const),
       diffStyle,
+      overflow: 'wrap' as const,
       hunkSeparators: 'line-info' as const,
       // Unchanged lines stay folded until asked for.
       expandUnchanged: false,
