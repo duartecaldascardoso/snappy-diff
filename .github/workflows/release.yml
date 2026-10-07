@@ -1,0 +1,62 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds every platform and publishes a release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-apple-darwin, os: macos-latest }
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build UI
+        run: npm --prefix ui ci && npm --prefix ui run build
+
+      - name: Install musl
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build binary
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [ "${{ runner.os }}" = Windows ]; then
+            7z a "$GITHUB_WORKSPACE/snappy-diff-${{ matrix.target }}.zip" snappy-diff.exe
+          else
+            tar -czf "$GITHUB_WORKSPACE/snappy-diff-${{ matrix.target }}.tar.gz" snappy-diff
+          fi
+
+      - name: Upload to release
+        run: |
+          gh release create "$TAG" --generate-notes 2>/dev/null || true
+          gh release upload "$TAG" snappy-diff-${{ matrix.target }}.* --clobber
