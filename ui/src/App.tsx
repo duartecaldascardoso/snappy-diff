@@ -15,7 +15,7 @@ import { usePrefs } from '@/hooks/use-prefs'
 import { useReview } from '@/hooks/use-review'
 import { useTheme } from '@/hooks/use-theme'
 import { type Entry, fileLoader, type Source, THEME, WORKTREE } from '@/lib/diff'
-import { reviewMarkdown } from '@/lib/review'
+import { reviewPrompt } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
 // Syntax highlighting runs off the main thread.
@@ -25,8 +25,15 @@ const POOL = {
 }
 const HIGHLIGHTER = { theme: THEME }
 
-const titleOf = (s?: Source) =>
-  s?.kind !== 'git' ? (s?.name ?? 'diff') : s.commit ? s.commit.slice(0, 7) : `${s.base}...${s.head || 'working tree'}`
+/** How the prompt for an AI agent names what was reviewed. */
+const subjectOf = (s?: Source) =>
+  s?.kind !== 'git'
+    ? `the patch \`${s?.name ?? 'diff'}\``
+    : s.commit
+      ? `commit ${s.commit.slice(0, 7)}`
+      : s.head === WORKTREE
+        ? `my uncommitted changes (against \`${s.base}\`)`
+        : `the changes in \`${s.base}...${s.head}\``
 
 export default function App() {
   const { source, key, refs, commits, entries, loading, error, ms, load } = useDiff()
@@ -99,7 +106,7 @@ export default function App() {
           onToggleSidebar={toggleSidebar}
           allCollapsed={allCollapsed}
           onToggleAll={toggleAll}
-          onCopyReview={() => navigator.clipboard.writeText(reviewMarkdown(titleOf(source), comments, entries))}
+          onCopyReview={() => navigator.clipboard.writeText(reviewPrompt(subjectOf(source), comments, entries))}
           onClearComments={clearComments}
         >
           <Settings

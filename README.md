@@ -30,8 +30,8 @@ git diff | snappy-diff -    # a diff from stdin
 
 You can also drop or paste a diff into the page.
 
-Mark files as viewed (`v`), comment on lines from the gutter, and copy the
-review as Markdown for a pull request or an agent. Press `?` for settings and
+Mark files as viewed (`v`), comment on lines from the gutter, then hit
+**Copy for AI** and paste your comments into your coding agent. Press `?` for settings and
 shortcuts.
 
 ## Build from source

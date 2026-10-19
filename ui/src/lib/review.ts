@@ -50,26 +50,33 @@ function lineText(file: FileDiffMetadata, side: AnnotationSide, n: number) {
   }
 }
 
-const lineRange = (c: Comment) => (c.start === c.end ? `L${c.end}` : `L${c.start}-${c.end}`)
+const codeOf = (file: FileDiffMetadata, c: Comment) => {
+  const lines = Array.from({ length: c.end - c.start + 1 }, (_, i) => lineText(file, c.side, c.start + i))
+  return lines.every((l) => l != null) ? lines.map((l) => l!.replace(/\r?\n$/, '')).join('\n') : null
+}
 
-/** The review as Markdown, ready to paste into a pull request or an agent. */
-export function reviewMarkdown(title: string, comments: Comment[], entries: Entry[]) {
+/**
+ * The comments as a prompt for a coding agent: one numbered item per comment,
+ * pointing at `path:line` (which agents can open), with the code and the ask.
+ * `subject` names what was reviewed, e.g. "my uncommitted changes".
+ */
+export function reviewPrompt(subject: string, comments: Comment[], entries: Entry[]) {
+  const order = new Map(entries.map((e, i) => [e.id, i]))
   const files = new Map(entries.map((e) => [e.id, e.file]))
-  const out = [`# Review of ${title}`]
-  const byFile = Map.groupBy(comments, (c) => c.file)
-  for (const [id, fileComments] of byFile) {
-    const file = files.get(id)
-    out.push('', `## ${file?.name ?? id}`)
-    for (const c of fileComments.toSorted((a, b) => a.end - b.end)) {
-      const side = c.side === 'deletions' ? ' (old)' : ''
-      out.push('', `**${lineRange(c)}${side}**`)
-      const code = file
-        ? Array.from({ length: c.end - c.start + 1 }, (_, i) => lineText(file, c.side, c.start + i))
-        : []
-      if (code.length && code.every((l) => l != null))
-        out.push('```' + (file?.name.split('.').pop() ?? ''), code.map((l) => l!.replace(/\r?\n$/, '')).join('\n'), '```')
-      out.push(c.text)
-    }
-  }
+  const sorted = comments.toSorted((a, b) => (order.get(a.file) ?? 0) - (order.get(b.file) ?? 0) || a.end - b.end)
+  const out = [
+    `Please address these review comments on ${subject}.`,
+    'Each one gives the file and lines, the code it refers to, and what to change.',
+  ]
+  sorted.forEach((c, i) => {
+    const file = files.get(c.file)
+    const path = file?.name ?? c.file
+    const lines = c.start === c.end ? `${c.end}` : `${c.start}-${c.end}`
+    const removed = c.side === 'deletions' ? ' (removed lines; numbers are from before the change)' : ''
+    out.push('', `${i + 1}. \`${path}:${lines}\`${removed}`)
+    const code = file && codeOf(file, c)
+    if (code) out.push('```' + path.split('.').pop(), code, '```')
+    out.push(c.text)
+  })
   return out.join('\n')
 }

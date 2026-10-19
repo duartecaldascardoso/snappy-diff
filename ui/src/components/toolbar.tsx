@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Check, ChevronsDownUp, ChevronsUpDown, FileUp, MessageSquare, PanelLeft, Pilcrow, RotateCw, X } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronsDownUp, ChevronsUpDown, FileUp, Sparkles, PanelLeft, Pilcrow, RotateCw, X } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -92,14 +92,14 @@ function Stats({ entries, viewed, ms }: { entries: Entry[]; viewed: number; ms?:
   )
 }
 
-/** Copies the review as Markdown; shown once there is something to copy. */
+/** Copies the comments as a prompt for an AI agent; shown once there are any. */
 function ReviewActions({ count, onCopy, onClear }: { count: number; onCopy: () => Promise<void>; onClear: () => void }) {
   const [copied, setCopied] = useState(false)
   if (!count) return null
   return (
     <div className="flex items-center rounded-md border">
       <Button
-        title="Copy review as Markdown"
+        title="Copy your comments as a prompt to paste into your AI agent"
         className="rounded-r-none"
         onClick={async () => {
           await onCopy()
@@ -107,8 +107,8 @@ function ReviewActions({ count, onCopy, onClear }: { count: number; onCopy: () =
           setTimeout(() => setCopied(false), 1500)
         }}
       >
-        {copied ? <Check /> : <MessageSquare />}
-        {copied ? 'Copied' : `Copy review (${count})`}
+        {copied ? <Check /> : <Sparkles />}
+        {copied ? 'Copied, paste into your AI' : `Copy for AI (${count})`}
       </Button>
       <Button size="icon" title="Delete all comments" className="rounded-l-none border-l" onClick={onClear}>
         <X />
