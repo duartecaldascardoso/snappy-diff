@@ -3,11 +3,11 @@ import { type Chrome, chromeFor, themeNamed } from '@/lib/themes'
 
 const CHROME_KEY = 'chrome'
 
-function apply(chrome: Chrome | null, dark: boolean) {
+function apply(chrome: Chrome) {
   const root = document.documentElement
   root.removeAttribute('style')
-  for (const [k, v] of Object.entries(chrome?.vars ?? {})) root.style.setProperty(k, v)
-  root.classList.toggle('dark', chrome?.dark ?? dark)
+  for (const [k, v] of Object.entries(chrome.vars)) root.style.setProperty(k, v)
+  root.classList.toggle('dark', chrome.dark)
 }
 
 /**
@@ -27,14 +27,13 @@ export function useAppearance(themeName: string) {
     let current = true
     chromeFor(variant).then((chrome) => {
       if (!current) return
-      apply(chrome, dark)
-      if (chrome) localStorage.setItem(CHROME_KEY, JSON.stringify(chrome))
-      else localStorage.removeItem(CHROME_KEY)
+      apply(chrome)
+      localStorage.setItem(CHROME_KEY, JSON.stringify(chrome))
     })
     return () => {
       current = false
     }
-  }, [variant, dark])
+  }, [variant])
 
   const toggleDark = useCallback(() => {
     localStorage.setItem('theme', dark ? 'light' : 'dark')

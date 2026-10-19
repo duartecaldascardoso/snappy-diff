@@ -1,6 +1,7 @@
 import { Command as CommandPrimitive } from 'cmdk'
-import { FileDiff, FileMinus2, FilePlus2, FileSymlink, GitCommitHorizontal, History, Layers, MessageSquare, X } from 'lucide-react'
+import { GitCommitHorizontal, History, Layers, MessageSquare, X } from 'lucide-react'
 import { type KeyboardEvent, type ReactNode, useMemo, useState } from 'react'
+import { FileIcon } from '@/components/file-icon'
 import { FootKey, Row, Section, TypeTab } from '@/components/goto/parts'
 import { Keys } from '@/components/keys'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -13,14 +14,6 @@ type Kind = 'all' | 'files' | 'commits' | 'comments' | 'actions'
 
 /** Something to do from the menu, with the shortcut that does it outside. */
 export type Action = { id: string; label: string; icon: ReactNode; keys?: string[]; words?: string; run: () => void }
-
-const ICONS = {
-  new: FilePlus2,
-  deleted: FileMinus2,
-  change: FileDiff,
-  'rename-pure': FileSymlink,
-  'rename-changed': FileSymlink,
-}
 
 // Substring matching instead of cmdk's fuzzy scoring, like the file filter.
 const filter = (value: string, search: string) => (matches(value, search) ? 1 : 0)
@@ -116,14 +109,13 @@ export function GoTo({
   }
 
   const fileRow = (e: Entry, value: string) => {
-    const Icon = ICONS[e.file.type]
     const { name, dir } = split(e.file.name)
     return (
       <Row
         key={value}
         value={value}
         onSelect={() => openFile(e.id)}
-        icon={<Icon />}
+        icon={<FileIcon type={e.file.type} />}
         aside={
           <>
             {dir && <span className="max-w-64 truncate">{dir}</span>}

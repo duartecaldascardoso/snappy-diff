@@ -38,13 +38,21 @@ export type Chrome = { vars: Record<string, string>; dark: boolean }
 
 const mix = (fg: string, percent: number, bg: string) => `color-mix(in oklab, ${fg} ${percent}%, ${bg})`
 
+type ThemeJson = { type?: string; fg?: string; colors?: Record<string, string> }
+
+// Pierre ships with the diff library rather than with Shiki.
+const PIERRE: Record<string, () => Promise<{ default: ThemeJson }>> = {
+  'pierre-light': () => import('@pierre/theme/pierre-light'),
+  'pierre-dark': () => import('@pierre/theme/pierre-dark'),
+}
+
 /**
- * The app colors for a Shiki theme, derived from its editor colors. Pierre
- * matches the built-in palette, so it needs none (`null`).
+ * The app colors for a syntax theme, derived from its editor colors, so the
+ * chrome, popovers and comment cards always sit on the same ground as the code.
  */
-export async function chromeFor(variant: string): Promise<Chrome | null> {
-  if (variant.startsWith('pierre')) return null
-  const theme = (await bundledThemes[variant as BundledTheme]()).default
+export async function chromeFor(variant: string): Promise<Chrome> {
+  const load = PIERRE[variant] ?? bundledThemes[variant as BundledTheme]
+  const theme: ThemeJson = (await load()).default
   const colors = theme.colors ?? {}
   const dark = theme.type === 'dark'
   const bg = colors['editor.background'] ?? (dark ? '#1e1e1e' : '#ffffff')

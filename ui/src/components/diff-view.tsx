@@ -11,6 +11,7 @@ import {
 import { ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { CommentCard, CommentEditor } from '@/components/comment'
+import { HEADER_HEIGHT, PinnedHeader } from '@/components/pinned-header'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { ReviewState } from '@/hooks/use-review'
 import type { Prefs } from '@/hooks/use-prefs'
@@ -58,6 +59,8 @@ export function DiffView({
 }) {
   const view = useRef<CodeViewHandle<Note, undefined>>(null)
   const [editing, setEditing] = useState<Comment | null>(null)
+  // The file whose header has scrolled out of view, shown pinned instead.
+  const [pinned, setPinned] = useState<number | null>(null)
 
   useImperativeHandle(ref, () => ({
     scrollToFile: (id) => {
@@ -83,6 +86,14 @@ export function DiffView({
   useEffect(() => {
     view.current?.scrollTo({ type: 'position', position: 0, behavior: 'instant' })
   }, [viewKey])
+
+  // Firefox scrolls on the compositor, ahead of the JavaScript that draws rows,
+  // so the default 200px of off-screen rows shows blank gaps on a quick flick.
+  // About a screen above and below keeps the rows there before they're needed.
+  useEffect(() => {
+    const viewer = view.current?.getInstance()
+    if (viewer) viewer.config.overscrollSize = Math.max(800, window.innerHeight)
+  }, [])
 
   // Highlighting runs in workers that keep their own theme; hand them the new one.
   const pool = useWorkerPool()
@@ -123,7 +134,9 @@ export function DiffView({
       hunkSeparators: 'line-info' as const,
       expandUnchanged: prefs.fullFiles && !!loadFiles,
       loadDiffFiles: loadFiles,
-      stickyHeaders: true,
+      // Off: CSS-sticky headers inside the virtualized list lag in Firefox.
+      // PinnedHeader takes their place.
+      stickyHeaders: false,
       // The gutter's + button (drag it for a range) starts a comment.
       enableGutterUtility: true,
       onGutterUtilityClick: (range: SelectedLineRange, { item }: { item: CodeViewItem<Note> }) =>
@@ -150,6 +163,12 @@ export function DiffView({
         else hi = mid - 1
       }
       onActiveChange(lo)
+      // Pin its header once the real one scrolls away, and step aside as the
+      // next file's header arrives so the two never overlap.
+      const top = viewer.getTopForItem(entries[lo].id) ?? 0
+      const next = entries[lo + 1] && viewer.getTopForItem(entries[lo + 1].id)
+      const show = scrollTop > top + 1 && (next == null || next - scrollTop > HEADER_HEIGHT)
+      setPinned(show ? lo : null)
     },
     [entries, onActiveChange],
   )
@@ -225,17 +244,29 @@ export function DiffView({
     [saveComment, deleteComment, closeEditor],
   )
 
+  const pinnedEntry = pinned != null && !collapsed.has(entries[pinned]?.id) ? entries[pinned] : undefined
+
   return (
-    <CodeView
-      ref={view}
-      items={items}
-      options={options}
-      onScroll={onScroll}
-      renderHeaderPrefix={renderHeaderPrefix}
-      renderHeaderFilenameSuffix={renderHeaderFilenameSuffix}
-      renderHeaderMetadata={renderHeaderMetadata}
-      renderAnnotation={renderAnnotation}
-      className="h-full overflow-auto"
-    />
+    <div className="relative h-full">
+      {pinnedEntry && (
+        <PinnedHeader
+          entry={pinnedEntry}
+          viewed={isViewed(pinnedEntry)}
+          onCollapse={() => onToggle(pinnedEntry.id)}
+          onToggleViewed={() => onToggleViewed(pinnedEntry)}
+        />
+      )}
+      <CodeView
+        ref={view}
+        items={items}
+        options={options}
+        onScroll={onScroll}
+        renderHeaderPrefix={renderHeaderPrefix}
+        renderHeaderFilenameSuffix={renderHeaderFilenameSuffix}
+        renderHeaderMetadata={renderHeaderMetadata}
+        renderAnnotation={renderAnnotation}
+        className="h-full overflow-auto"
+      />
+    </div>
   )
 }
