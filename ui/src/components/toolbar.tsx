@@ -1,7 +1,9 @@
-import { ArrowLeftRight, Check, ChevronsDownUp, ChevronsUpDown, FileUp, Sparkles, PanelLeft, Pilcrow, RotateCw, X } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronsDownUp, ChevronsUpDown, FileUp, PanelLeft, Pilcrow, RotateCw, Sparkles, X } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
+import { Picker } from '@/components/picker'
+import { options } from '@/lib/options'
 import { Button } from '@/components/ui/button'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Toggle } from '@/components/ui/toggle'
 import { type Commit, type Entry, type GitSource, type Source, WORKTREE } from '@/lib/diff'
 
 function RefPicker({
@@ -16,60 +18,68 @@ function RefPicker({
   onLoad: (source: Source) => void
 }) {
   // The CLI accepts any revision, so the current pair may not be a listed ref.
-  const options = useMemo(
+  const all = useMemo(
     () => [...new Set([...refs, source.base, source.head])].filter((r) => r !== WORKTREE),
     [refs, source],
   )
-  // Picking another base or head drops a commit narrowed down to.
-  const select = (side: 'base' | 'head') => (
-    <NativeSelect
-      aria-label={side}
-      value={source[side]}
-      onChange={(e) => onLoad({ ...source, [side]: e.target.value, commit: undefined })}
-    >
-      {side === 'head' && <option value={WORKTREE}>Working tree</option>}
-      {options.map((r) => (
-        <option key={r}>{r}</option>
-      ))}
-    </NativeSelect>
+  const heads = useMemo(() => [{ options: [{ value: WORKTREE, label: 'Working tree' }] }, ...options(all)], [all])
+  const commitGroups = useMemo(
+    () => [
+      {
+        options: [
+          { value: '', label: `All ${commits.length} commits` },
+          ...commits.map((c) => ({ value: c.sha, label: `${c.sha.slice(0, 7)} ${c.subject}`, title: `${c.author}, ${c.date}` })),
+        ],
+      },
+    ],
+    [commits],
   )
+  // Picking another base or head drops a commit narrowed down to.
   return (
     <>
-      {select('base')}
+      <Picker
+        aria-label="Base"
+        value={source.base}
+        groups={options(all)}
+        onChange={(base) => onLoad({ ...source, base, commit: undefined })}
+        className="font-mono"
+      />
       <Button
-        size="icon"
+        variant="ghost"
+        size="icon-sm"
         title="Swap base and head"
         disabled={source.head === WORKTREE}
         onClick={() => onLoad({ ...source, base: source.head, head: source.base, commit: undefined })}
       >
         <ArrowLeftRight />
       </Button>
-      {select('head')}
+      <Picker
+        aria-label="Head"
+        value={source.head}
+        groups={heads}
+        onChange={(head) => onLoad({ ...source, head, commit: undefined })}
+        className="font-mono"
+      />
       {commits.length > 1 && (
-        <NativeSelect
-          aria-label="commit"
+        <Picker
+          aria-label="Commit"
           value={source.commit ?? ''}
-          onChange={(e) => onLoad({ ...source, commit: e.target.value || undefined })}
-        >
-          <option value="">All {commits.length} commits</option>
-          {commits.map((c) => (
-            <option key={c.sha} value={c.sha} title={`${c.author}, ${c.date}`}>
-              {c.sha.slice(0, 7)} {c.subject}
-            </option>
-          ))}
-        </NativeSelect>
+          groups={commitGroups}
+          onChange={(sha) => onLoad({ ...source, commit: sha || undefined })}
+          className="max-w-64"
+        />
       )}
-      <Button size="icon" title="Reload" onClick={() => onLoad(source)}>
+      <Button variant="ghost" size="icon-sm" title="Reload" onClick={() => onLoad(source)}>
         <RotateCw />
       </Button>
-      <Button
-        size="icon"
+      <Toggle
+        size="sm"
         title="Ignore whitespace"
-        aria-pressed={!!source.ignoreWhitespace}
-        onClick={() => onLoad({ ...source, ignoreWhitespace: !source.ignoreWhitespace })}
+        pressed={!!source.ignoreWhitespace}
+        onPressedChange={(ignoreWhitespace) => onLoad({ ...source, ignoreWhitespace })}
       >
         <Pilcrow />
-      </Button>
+      </Toggle>
     </>
   )
 }
@@ -97,10 +107,12 @@ function ReviewActions({ count, onCopy, onClear }: { count: number; onCopy: () =
   const [copied, setCopied] = useState(false)
   if (!count) return null
   return (
-    <div className="flex items-center rounded-md border">
+    <div className="flex items-center">
       <Button
+        variant="outline"
+        size="sm"
         title="Copy your comments as a prompt to paste into your AI agent"
-        className="rounded-r-none"
+        className="rounded-r-none text-xs"
         onClick={async () => {
           await onCopy()
           setCopied(true)
@@ -110,7 +122,13 @@ function ReviewActions({ count, onCopy, onClear }: { count: number; onCopy: () =
         {copied ? <Check /> : <Sparkles />}
         {copied ? 'Copied, paste into your AI' : `Copy for AI (${count})`}
       </Button>
-      <Button size="icon" title="Delete all comments" className="rounded-l-none border-l" onClick={onClear}>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        title="Delete all comments"
+        className="rounded-l-none border-l-0"
+        onClick={onClear}
+      >
         <X />
       </Button>
     </div>
@@ -152,25 +170,30 @@ export function Toolbar({
   children?: ReactNode
 }) {
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2 border-b px-2">
-      <Button size="icon" title="Toggle sidebar (⌘B)" onClick={onToggleSidebar}>
+    <header className="flex h-12 shrink-0 items-center gap-1.5 border-b px-2">
+      <Button variant="ghost" size="icon-sm" title="Toggle sidebar (⌘B)" onClick={onToggleSidebar}>
         <PanelLeft />
       </Button>
-      <span className="mr-1 font-semibold tracking-tight whitespace-nowrap">snappy diff</span>
+      <span className="mr-1 text-sm font-semibold tracking-tight whitespace-nowrap">snappy diff</span>
 
       {source?.kind === 'git' && <RefPicker source={source} refs={refs} commits={commits} onLoad={onLoad} />}
       {source?.kind === 'patch' && (
         <span className="truncate font-mono text-xs text-muted-foreground">{source.name}</span>
       )}
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-1.5">
         <Stats entries={entries} viewed={viewed} ms={ms} />
         <ReviewActions count={comments} onCopy={onCopyReview} onClear={onClearComments} />
-        <Button size="icon" title={allCollapsed ? 'Expand all files' : 'Collapse all files'} onClick={onToggleAll}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title={allCollapsed ? 'Expand all files' : 'Collapse all files'}
+          onClick={onToggleAll}
+        >
           {allCollapsed ? <ChevronsUpDown /> : <ChevronsDownUp />}
         </Button>
         {children}
-        <Button variant="outline" onClick={onOpen}>
+        <Button variant="outline" size="sm" className="text-xs" onClick={onOpen}>
           <FileUp />
           Open diff
         </Button>

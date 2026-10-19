@@ -18,10 +18,10 @@ export function CommentCard({
     <div className="m-2 max-w-3xl rounded-md border bg-background px-3 py-2 font-sans text-[13px] shadow-xs">
       <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
         <span className="mr-auto">{lines(comment)}</span>
-        <Button className="h-6" onClick={onEdit}>
+        <Button variant="ghost" size="xs" onClick={onEdit}>
           Edit
         </Button>
-        <Button className="h-6" onClick={onDelete}>
+        <Button variant="ghost" size="xs" onClick={onDelete}>
           Delete
         </Button>
       </div>
@@ -48,17 +48,24 @@ export function CommentEditor({
         autoFocus
         value={text}
         rows={3}
+        className="min-h-16 text-[13px]"
         placeholder="Leave a comment"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save()
+          // Enter saves; Shift+Enter breaks the line. Not while an IME is composing.
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault()
+            save()
+          }
           if (e.key === 'Escape') onCancel()
         }}
       />
       <div className="mt-1 flex items-center justify-end gap-1">
-        <span className="mr-auto px-1 text-xs text-muted-foreground">⌘↵ to save</span>
-        <Button onClick={onCancel}>Cancel</Button>
-        <Button variant="outline" disabled={!text.trim()} onClick={save}>
+        <span className="mr-auto px-1 text-xs text-muted-foreground">↵ to save, ⇧↵ for a new line</span>
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={!text.trim()} onClick={save}>
           Comment
         </Button>
       </div>

@@ -1,4 +1,14 @@
+import type { FileTreeIcons } from '@pierre/trees'
 import { useCallback, useEffect, useState } from 'react'
+
+/** The file tree's built-in icon sets, plain or colored by file type. */
+export const ICON_PACKS = {
+  'standard-colored': { label: 'Standard, colored', icons: { set: 'standard', colored: true } },
+  standard: { label: 'Standard', icons: { set: 'standard', colored: false } },
+  'complete-colored': { label: 'Complete, colored', icons: { set: 'complete', colored: true } },
+  complete: { label: 'Complete', icons: { set: 'complete', colored: false } },
+  minimal: { label: 'Minimal', icons: { set: 'minimal', colored: false } },
+} satisfies Record<string, { label: string; icons: FileTreeIcons }>
 
 export type Prefs = {
   diffStyle: 'split' | 'unified'
@@ -9,13 +19,15 @@ export type Prefs = {
   font: string
   /** Syntax theme family, see THEMES. */
   theme: string
+  icons: keyof typeof ICON_PACKS
 }
 
-const DEFAULTS: Prefs = { diffStyle: 'split', wrap: true, fullFiles: false, font: '', theme: 'Pierre' }
+const DEFAULTS: Prefs = { diffStyle: 'split', wrap: true, fullFiles: false, font: '', theme: 'Pierre', icons: 'standard-colored' }
 
 function read(): Prefs {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('prefs') ?? '{}') }
+    const prefs = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('prefs') ?? '{}') }
+    return prefs.icons in ICON_PACKS ? prefs : { ...prefs, icons: DEFAULTS.icons }
   } catch {
     return DEFAULTS
   }

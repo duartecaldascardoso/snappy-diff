@@ -180,7 +180,7 @@ export function DiffView({
             </span>
           )}
           <label className="flex cursor-pointer items-center gap-1.5 text-muted-foreground select-none">
-            <Checkbox checked={isViewed(e)} onChange={() => onToggleViewed(e)} />
+            <Checkbox checked={isViewed(e)} onCheckedChange={() => onToggleViewed(e)} />
             Viewed
           </label>
         </span>

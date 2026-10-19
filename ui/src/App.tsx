@@ -3,7 +3,7 @@ import DiffWorker from '@pierre/diffs/worker/worker.js?worker'
 import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react'
 import { DiffView, type DiffViewHandle } from '@/components/diff-view'
 import { EmptyState } from '@/components/empty-state'
-import { Settings, SETTINGS_ID } from '@/components/settings'
+import { Settings } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
 import { Toolbar } from '@/components/toolbar'
 import { useCollapsed } from '@/hooks/use-collapsed'
@@ -83,7 +83,6 @@ export default function App() {
   useHotkey('j', () => step(1))
   useHotkey('k', () => step(-1))
   useHotkey('mod+b', toggleSidebar)
-  useHotkey('?', () => document.getElementById(SETTINGS_ID)?.togglePopover())
   useHotkey('v', () => {
     const e = entries[active]
     if (!e) return
@@ -122,7 +121,7 @@ export default function App() {
 
         <div className="flex min-h-0 flex-1">
           <aside className={cn('w-72 shrink-0 border-r', sidebar === 'closed' && 'hidden')}>
-            <Sidebar entries={entries} activePath={entries[active]?.file.name} onSelect={jumpToFile} />
+            <Sidebar entries={entries} activePath={entries[active]?.file.name} icons={prefs.icons} onSelect={jumpToFile} />
           </aside>
           <main
             className="min-w-0 flex-1"

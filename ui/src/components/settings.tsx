@@ -1,30 +1,64 @@
 import { Settings2 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { Picker } from '@/components/picker'
+import { options } from '@/lib/options'
 import { Button } from '@/components/ui/button'
-import { NativeSelect } from '@/components/ui/native-select'
+import { Kbd } from '@/components/ui/kbd'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { ToggleGroup } from '@/components/ui/toggle-group'
-import type { Prefs, SetPref } from '@/hooks/use-prefs'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useHotkey } from '@/hooks/use-hotkey'
+import { ICON_PACKS, type Prefs, type SetPref } from '@/hooks/use-prefs'
 import { BUNDLED_FONTS, installedFonts } from '@/lib/fonts'
 import { THEMES } from '@/lib/themes'
 
-export const SETTINGS_ID = 'settings'
-
 const SHORTCUTS = [
-  ['j / k', 'Next / previous file'],
-  ['v', 'Mark file as viewed'],
-  ['/  ⌘K', 'Search files'],
-  ['⌘B', 'Toggle sidebar'],
-  ['⌘V', 'View a diff from the clipboard'],
-  ['?', 'This panel'],
-]
+  [['j', 'k'], 'Next / previous file'],
+  [['v'], 'Mark file as viewed'],
+  [['/'], 'Search files'],
+  [['⌘', 'B'], 'Toggle sidebar'],
+  [['⌘', 'V'], 'View a diff from the clipboard'],
+  [['?'], 'This panel'],
+] as const
+
+/** Every control in a row shares this width, so the panel lines up. */
+const CONTROL = 'w-40'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex h-8 items-center justify-between gap-3">
+    <div className="flex h-9 items-center justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
       {children}
     </div>
+  )
+}
+
+function Segmented<T extends string>({
+  value,
+  items,
+  onChange,
+}: {
+  value: T
+  items: [T, string][]
+  onChange: (value: T) => void
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      value={value}
+      // Radix reports '' when the pressed item is clicked again; keep the value.
+      onValueChange={(v) => v && onChange(v as T)}
+      className={CONTROL}
+    >
+      {items.map(([v, label]) => (
+        <ToggleGroupItem key={v} value={v} className="flex-1 text-xs">
+          {label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   )
 }
 
@@ -42,21 +76,28 @@ export function Settings({
   /** Full files need the repository; a pasted patch only has its hunks. */
   canShowFullFiles: boolean
 }) {
+  const [open, setOpen] = useState(false)
   const [installed] = useState(installedFonts)
+  useHotkey('?', () => setOpen((o) => !o))
+
+  const fonts = [
+    { options: [{ value: '', label: 'Default' }] },
+    { label: 'Bundled', options: BUNDLED_FONTS.map((f) => ({ value: f, label: f })) },
+    ...(installed.length ? [{ label: 'Installed', options: installed.map((f) => ({ value: f, label: f })) }] : []),
+  ]
+
   return (
-    <>
-      <Button size="icon" title="Settings and shortcuts (?)" popoverTarget={SETTINGS_ID}>
-        <Settings2 />
-      </Button>
-      <div
-        id={SETTINGS_ID}
-        popover="auto"
-        className="fixed inset-auto top-12 right-2 m-0 w-72 rounded-lg border bg-background p-3 text-xs text-foreground shadow-lg"
-      >
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon-sm" title="Settings and shortcuts (?)">
+          <Settings2 />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-3 text-xs">
         <Row label="Layout">
-          <ToggleGroup
+          <Segmented
             value={prefs.diffStyle}
-            options={[
+            items={[
               ['split', 'Split'],
               ['unified', 'Unified'],
             ]}
@@ -64,9 +105,9 @@ export function Settings({
           />
         </Row>
         <Row label="Mode">
-          <ToggleGroup
+          <Segmented
             value={dark ? 'dark' : 'light'}
-            options={[
+            items={[
               ['light', 'Light'],
               ['dark', 'Dark'],
             ]}
@@ -74,49 +115,49 @@ export function Settings({
           />
         </Row>
         <Row label="Theme">
-          <NativeSelect value={prefs.theme} onChange={(e) => setPref('theme', e.target.value)}>
-            {THEMES.map((t) => (
-              <option key={t.name}>{t.name}</option>
-            ))}
-          </NativeSelect>
+          <Picker
+            aria-label="Theme"
+            value={prefs.theme}
+            groups={options(THEMES.map((t) => t.name))}
+            onChange={(v) => setPref('theme', v)}
+            className={CONTROL}
+          />
         </Row>
         <Row label="Code font">
-          <NativeSelect value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
-            <option value="">Default</option>
-            <optgroup label="Bundled">
-              {BUNDLED_FONTS.map((f) => (
-                <option key={f}>{f}</option>
-              ))}
-            </optgroup>
-            {installed.length > 0 && (
-              <optgroup label="Installed">
-                {installed.map((f) => (
-                  <option key={f}>{f}</option>
-                ))}
-              </optgroup>
-            )}
-          </NativeSelect>
+          <Picker aria-label="Code font" value={prefs.font} groups={fonts} onChange={(v) => setPref('font', v)} className={CONTROL} />
+        </Row>
+        <Row label="File icons">
+          <Picker
+            aria-label="File icons"
+            value={prefs.icons}
+            groups={[{ options: Object.entries(ICON_PACKS).map(([value, { label }]) => ({ value, label })) }]}
+            onChange={(v) => setPref('icons', v as Prefs['icons'])}
+            className={CONTROL}
+          />
         </Row>
         <Row label="Wrap lines">
-          <Switch aria-label="Wrap lines" checked={prefs.wrap} onChange={(v) => setPref('wrap', v)} />
+          <Switch aria-label="Wrap lines" checked={prefs.wrap} onCheckedChange={(v) => setPref('wrap', v)} />
         </Row>
         <Row label="Show full files">
           <Switch
             aria-label="Show full files"
             checked={prefs.fullFiles}
             disabled={!canShowFullFiles}
-            onChange={(v) => setPref('fullFiles', v)}
+            onCheckedChange={(v) => setPref('fullFiles', v)}
           />
         </Row>
-        <div className="mt-2 border-t pt-2">
-          {SHORTCUTS.map(([keys, action]) => (
-            <div key={keys} className="flex h-6 items-center justify-between">
-              <span className="text-muted-foreground">{action}</span>
-              <kbd className="font-mono">{keys}</kbd>
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
+        <Separator className="my-2" />
+        {SHORTCUTS.map(([keys, action]) => (
+          <div key={action} className="flex h-7 items-center justify-between">
+            <span className="text-muted-foreground">{action}</span>
+            <span className="flex gap-1">
+              {keys.map((k) => (
+                <Kbd key={k}>{k}</Kbd>
+              ))}
+            </span>
+          </div>
+        ))}
+      </PopoverContent>
+    </Popover>
   )
 }

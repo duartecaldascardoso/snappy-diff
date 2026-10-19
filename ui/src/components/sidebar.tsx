@@ -3,6 +3,7 @@ import { FileTree, useFileTree } from '@pierre/trees/react'
 import { memo, useEffect, useRef } from 'react'
 import { useHotkey } from '@/hooks/use-hotkey'
 import { useLatest } from '@/hooks/use-latest'
+import { ICON_PACKS, type Prefs } from '@/hooks/use-prefs'
 import type { Entry } from '@/lib/diff'
 
 const STATUS = {
@@ -16,11 +17,13 @@ const STATUS = {
 export const Sidebar = memo(function Sidebar({
   entries,
   activePath,
+  icons,
   onSelect,
 }: {
   entries: Entry[]
   /** The file currently at the top of the diff view. */
   activePath?: string
+  icons: Prefs['icons']
   onSelect: (path: string) => void
 }) {
   const select = useLatest(onSelect)
@@ -34,6 +37,10 @@ export const Sidebar = memo(function Sidebar({
     search: true,
     fileTreeSearchMode: 'hide-non-matches',
     searchBlurBehavior: 'retain',
+    icons: ICON_PACKS[icons].icons,
+    // Like GitHub: names stay neutral; only the status marker takes the color.
+    unsafeCSS: `[data-item-git-status] > [data-item-section="content"] { color: var(--trees-fg); }
+      [data-item-git-status] > [data-item-section="icon"] > :not([data-icon-name="file-tree-icon-chevron"]) { color: revert-layer; }`,
     onSelectionChange: (paths) => {
       const path = paths.at(-1)
       if (path && !path.endsWith('/') && !following.current) select.current(path)
@@ -57,6 +64,8 @@ export const Sidebar = memo(function Sidebar({
     following.current = false
     model.scrollToPath(item.getPath(), { focus: false })
   }, [model, activePath, entries])
+
+  useEffect(() => model.setIcons(ICON_PACKS[icons].icons), [model, icons])
 
   useHotkey('/', () => model.openSearch())
   useHotkey('mod+k', () => model.openSearch())
