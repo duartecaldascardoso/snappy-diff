@@ -6,14 +6,17 @@ import {
   type DiffLineAnnotation,
   type FileDiffContentsLoader,
   type LineAnnotation,
+  useWorkerPool,
 } from '@pierre/diffs/react'
 import { ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { CommentCard, CommentEditor } from '@/components/comment'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { ReviewState } from '@/hooks/use-review'
 import type { Prefs } from '@/hooks/use-prefs'
-import { type Entry, hash, THEME } from '@/lib/diff'
+import { type Entry, hash } from '@/lib/diff'
 import type { Comment } from '@/lib/review'
+import type { Theme } from '@/lib/themes'
 
 export type DiffViewHandle = { scrollToFile: (id: string) => void }
 
@@ -30,6 +33,7 @@ export function DiffView({
   review,
   onToggleViewed,
   prefs,
+  theme,
   dark,
   loadFiles,
 }: {
@@ -44,6 +48,7 @@ export function DiffView({
   review: ReviewState
   onToggleViewed: (e: Entry) => void
   prefs: Prefs
+  theme: Theme
   dark: boolean
   /** Fetches full files so folded lines can be expanded. */
   loadFiles?: FileDiffContentsLoader
@@ -67,6 +72,12 @@ export function DiffView({
   useEffect(() => {
     view.current?.scrollTo({ type: 'position', position: 0, behavior: 'instant' })
   }, [viewKey])
+
+  // Highlighting runs in workers that keep their own theme; hand them the new one.
+  const pool = useWorkerPool()
+  useEffect(() => {
+    pool?.setRenderOptions({ theme: { light: theme.light, dark: theme.dark } })
+  }, [pool, theme])
 
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries])
   const { comments, isViewed, saveComment, deleteComment } = review
@@ -94,7 +105,7 @@ export function DiffView({
 
   const options = useMemo(
     () => ({
-      theme: THEME,
+      theme: { light: theme.light, dark: theme.dark },
       themeType: dark ? ('dark' as const) : ('light' as const),
       diffStyle: prefs.diffStyle,
       overflow: prefs.wrap ? ('wrap' as const) : ('scroll' as const),
@@ -114,7 +125,7 @@ export function DiffView({
           text: '',
         }),
     }),
-    [dark, prefs.diffStyle, prefs.wrap, prefs.fullFiles, loadFiles],
+    [theme, dark, prefs.diffStyle, prefs.wrap, prefs.fullFiles, loadFiles],
   )
 
   const onScroll = useCallback(
@@ -169,12 +180,7 @@ export function DiffView({
             </span>
           )}
           <label className="flex cursor-pointer items-center gap-1.5 text-muted-foreground select-none">
-            <input
-              type="checkbox"
-              checked={isViewed(e)}
-              onChange={() => onToggleViewed(e)}
-              className="accent-foreground"
-            />
+            <Checkbox checked={isViewed(e)} onChange={() => onToggleViewed(e)} />
             Viewed
           </label>
         </span>

@@ -17,9 +17,12 @@
   --destructive: oklch(0.577 0.245 27.325);
   --added: oklch(0.6 0.16 150);
   --deleted: oklch(0.6 0.2 25);
+  /* Native controls (select popups, scrollbars) follow the mode too. */
+  color-scheme: light;
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --muted: oklch(0.205 0 0);

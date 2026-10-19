@@ -6,11 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>snappy diff</title>
     <script>
-      // Set the theme before first paint to avoid a flash.
+      // Paint the last used mode and theme colors before React loads.
       (function () {
+        var root = document.documentElement
         var t = localStorage.getItem('theme')
-        if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
-          document.documentElement.classList.add('dark')
+        var dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        try {
+          var chrome = JSON.parse(localStorage.getItem('chrome') || 'null')
+          if (chrome) {
+            for (var k in chrome.vars) root.style.setProperty(k, chrome.vars[k])
+            dark = chrome.dark
+          }
+        } catch (e) {}
+        root.classList.toggle('dark', dark)
       })()
     </script>
   </head>

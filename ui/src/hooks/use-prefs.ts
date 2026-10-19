@@ -7,9 +7,11 @@ export type Prefs = {
   fullFiles: boolean
   /** Code font; empty means the default. */
   font: string
+  /** Syntax theme family, see THEMES. */
+  theme: string
 }
 
-const DEFAULTS: Prefs = { diffStyle: 'split', wrap: true, fullFiles: false, font: '' }
+const DEFAULTS: Prefs = { diffStyle: 'split', wrap: true, fullFiles: false, font: '', theme: 'Pierre' }
 
 function read(): Prefs {
   try {

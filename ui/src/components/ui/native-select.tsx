@@ -7,7 +7,7 @@ export function NativeSelect({ className, ...props }: ComponentProps<'select'>) 
     <div className="relative">
       <select
         className={cn(
-          'h-7 max-w-52 min-w-0 appearance-none truncate rounded-md border border-input bg-transparent py-0 pr-7 pl-2.5 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30',
+          'h-7 max-w-52 min-w-0 appearance-none truncate rounded-md border border-input bg-transparent py-0 pr-7 pl-2.5 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30 [&_optgroup]:bg-background [&_option]:bg-background [&_option]:text-foreground',
           className,
         )}
         {...props}

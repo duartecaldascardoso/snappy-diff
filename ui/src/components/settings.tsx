@@ -2,8 +2,11 @@ import { Settings2 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Switch } from '@/components/ui/switch'
+import { ToggleGroup } from '@/components/ui/toggle-group'
 import type { Prefs, SetPref } from '@/hooks/use-prefs'
-import { installedFonts } from '@/lib/fonts'
+import { BUNDLED_FONTS, installedFonts } from '@/lib/fonts'
+import { THEMES } from '@/lib/themes'
 
 export const SETTINGS_ID = 'settings'
 
@@ -25,36 +28,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Choice<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T
-  options: [T, string][]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div className="flex rounded-md border p-0.5">
-      {options.map(([v, label]) => (
-        <Button key={v} className="h-6" aria-pressed={v === value} onClick={() => onChange(v)}>
-          {label}
-        </Button>
-      ))}
-    </div>
-  )
-}
-
-const Switch = ({ checked, disabled, onChange }: { checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) => (
-  <input
-    type="checkbox"
-    checked={checked}
-    disabled={disabled}
-    onChange={(e) => onChange(e.target.checked)}
-    className="size-4 accent-foreground disabled:opacity-50"
-  />
-)
-
 export function Settings({
   prefs,
   setPref,
@@ -69,7 +42,7 @@ export function Settings({
   /** Full files need the repository; a pasted patch only has its hunks. */
   canShowFullFiles: boolean
 }) {
-  const [fonts] = useState(installedFonts)
+  const [installed] = useState(installedFonts)
   return (
     <>
       <Button size="icon" title="Settings and shortcuts (?)" popoverTarget={SETTINGS_ID}>
@@ -81,7 +54,7 @@ export function Settings({
         className="fixed inset-auto top-12 right-2 m-0 w-72 rounded-lg border bg-background p-3 text-xs text-foreground shadow-lg"
       >
         <Row label="Layout">
-          <Choice
+          <ToggleGroup
             value={prefs.diffStyle}
             options={[
               ['split', 'Split'],
@@ -90,8 +63,8 @@ export function Settings({
             onChange={(v) => setPref('diffStyle', v)}
           />
         </Row>
-        <Row label="Theme">
-          <Choice
+        <Row label="Mode">
+          <ToggleGroup
             value={dark ? 'dark' : 'light'}
             options={[
               ['light', 'Light'],
@@ -100,22 +73,41 @@ export function Settings({
             onChange={(v) => (v === 'dark') !== dark && onToggleDark()}
           />
         </Row>
-        <Row label="Wrap lines">
-          <Switch checked={prefs.wrap} onChange={(v) => setPref('wrap', v)} />
+        <Row label="Theme">
+          <NativeSelect value={prefs.theme} onChange={(e) => setPref('theme', e.target.value)}>
+            {THEMES.map((t) => (
+              <option key={t.name}>{t.name}</option>
+            ))}
+          </NativeSelect>
         </Row>
-        <Row label="Show full files">
-          <Switch checked={prefs.fullFiles} disabled={!canShowFullFiles} onChange={(v) => setPref('fullFiles', v)} />
-        </Row>
-        {fonts.length > 0 && (
-          <Row label="Code font">
-            <NativeSelect value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
-              <option value="">Default</option>
-              {fonts.map((f) => (
+        <Row label="Code font">
+          <NativeSelect value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
+            <option value="">Default</option>
+            <optgroup label="Bundled">
+              {BUNDLED_FONTS.map((f) => (
                 <option key={f}>{f}</option>
               ))}
-            </NativeSelect>
-          </Row>
-        )}
+            </optgroup>
+            {installed.length > 0 && (
+              <optgroup label="Installed">
+                {installed.map((f) => (
+                  <option key={f}>{f}</option>
+                ))}
+              </optgroup>
+            )}
+          </NativeSelect>
+        </Row>
+        <Row label="Wrap lines">
+          <Switch aria-label="Wrap lines" checked={prefs.wrap} onChange={(v) => setPref('wrap', v)} />
+        </Row>
+        <Row label="Show full files">
+          <Switch
+            aria-label="Show full files"
+            checked={prefs.fullFiles}
+            disabled={!canShowFullFiles}
+            onChange={(v) => setPref('fullFiles', v)}
+          />
+        </Row>
         <div className="mt-2 border-t pt-2">
           {SHORTCUTS.map(([keys, action]) => (
             <div key={keys} className="flex h-6 items-center justify-between">

@@ -1,7 +1,5 @@
 import { type FileDiffMetadata, parsePatchFiles } from '@pierre/diffs'
 
-export const THEME = { dark: 'pierre-dark', light: 'pierre-light' } as const
-
 export type Meta = {
   mode: 'git' | 'patch' | 'empty'
   refs: string[]

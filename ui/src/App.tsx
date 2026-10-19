@@ -13,8 +13,9 @@ import { usePatchInput } from '@/hooks/use-patch-input'
 import { usePersisted } from '@/hooks/use-persisted'
 import { usePrefs } from '@/hooks/use-prefs'
 import { useReview } from '@/hooks/use-review'
-import { useTheme } from '@/hooks/use-theme'
-import { type Entry, fileLoader, type Source, THEME, WORKTREE } from '@/lib/diff'
+import { useAppearance } from '@/hooks/use-appearance'
+import { type Entry, fileLoader, type Source, WORKTREE } from '@/lib/diff'
+import { fontFamily } from '@/lib/fonts'
 import { reviewPrompt } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +24,6 @@ const POOL = {
   workerFactory: () => new DiffWorker(),
   poolSize: Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)),
 }
-const HIGHLIGHTER = { theme: THEME }
 
 /** How the prompt for an AI agent names what was reviewed. */
 const subjectOf = (s?: Source) =>
@@ -45,7 +45,9 @@ export default function App() {
   const [active, setActive] = useState(0)
   const [prefs, setPref] = usePrefs()
   const [sidebar, setSidebar] = usePersisted<'open' | 'closed'>('sidebar', 'open')
-  const [dark, toggleDark] = useTheme()
+  const { dark, toggleDark, theme } = useAppearance(prefs.theme)
+  // The worker pool is created once, warmed up with the theme in use at startup.
+  const [highlighter] = useState(() => ({ theme: { light: theme.light, dark: theme.dark } }))
   const view = useRef<DiffViewHandle>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -91,7 +93,7 @@ export default function App() {
   })
 
   return (
-    <WorkerPoolContextProvider poolOptions={POOL} highlighterOptions={HIGHLIGHTER}>
+    <WorkerPoolContextProvider poolOptions={POOL} highlighterOptions={highlighter}>
       <div className="flex h-full flex-col">
         <Toolbar
           source={source}
@@ -124,7 +126,7 @@ export default function App() {
           </aside>
           <main
             className="min-w-0 flex-1"
-            style={prefs.font ? ({ '--diffs-font-family': `"${prefs.font}", monospace` } as CSSProperties) : undefined}
+            style={prefs.font ? ({ '--diffs-font-family': fontFamily(prefs.font) } as CSSProperties) : undefined}
           >
             {entries.length > 0 ? (
               <DiffView
@@ -137,6 +139,7 @@ export default function App() {
                 review={review}
                 onToggleViewed={toggleViewed}
                 prefs={prefs}
+                theme={theme}
                 dark={dark}
                 loadFiles={loadFiles}
               />
