@@ -2,16 +2,14 @@
 
 # snappy diff
 
-**An insanely fast diff viewer for git branches and patch files.**
+An insanely fast diff viewer for git branches and patch files.<br>
+Review a branch like a pull request, comment, and hand it to your AI agent.
 
-Review a branch like a pull request, leave comments, and hand them to your AI agent.
+[Install](#install) · [Use](#use) · [Review](#review) · [Keys](#keys)
 
-[![Release](https://img.shields.io/github/v/release/duartecaldascardoso/snappy-diff?style=flat-square&color=000)](https://github.com/duartecaldascardoso/snappy-diff/releases/latest)
-![macOS](https://img.shields.io/badge/macOS-000?style=flat-square&logo=apple)
-![Linux](https://img.shields.io/badge/Linux-000?style=flat-square&logo=linux&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-000?style=flat-square&logo=windows)
+<br>
 
-<img src="docs/demo.gif" alt="snappy diff reviewing its own code" width="900">
+<img src="docs/demo.gif" alt="snappy diff reviewing its own code" width="100%">
 
 </div>
 
