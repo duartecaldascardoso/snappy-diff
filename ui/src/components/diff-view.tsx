@@ -18,7 +18,10 @@ import { type Entry, hash } from '@/lib/diff'
 import type { Comment } from '@/lib/review'
 import type { Theme } from '@/lib/themes'
 
-export type DiffViewHandle = { scrollToFile: (id: string) => void }
+export type DiffViewHandle = {
+  scrollToFile: (id: string) => void
+  scrollToLine: (id: string, lineNumber: number, side: Comment['side']) => void
+}
 
 /** A comment shown under its last line, possibly open for editing. */
 type Note = { comment: Comment; editing: boolean }
@@ -63,6 +66,14 @@ export function DiffView({
       let frames = 4
       const aim = () => {
         view.current?.scrollTo({ type: 'item', id, align: 'start', behavior: 'instant' })
+        if (--frames) requestAnimationFrame(aim)
+      }
+      aim()
+    },
+    scrollToLine: (id, lineNumber, side) => {
+      let frames = 4
+      const aim = () => {
+        view.current?.scrollTo({ type: 'line', id, lineNumber, side, align: 'center', behavior: 'instant' })
         if (--frames) requestAnimationFrame(aim)
       }
       aim()

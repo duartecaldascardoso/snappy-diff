@@ -3,6 +3,8 @@ import DiffWorker from '@pierre/diffs/worker/worker.js?worker'
 import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react'
 import { DiffView, type DiffViewHandle } from '@/components/diff-view'
 import { EmptyState } from '@/components/empty-state'
+import { GoTo } from '@/components/goto'
+import { gotoActions } from '@/components/goto-actions'
 import { Settings } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
 import { Toolbar } from '@/components/toolbar'
@@ -48,6 +50,8 @@ export default function App() {
   const { dark, toggleDark, theme } = useAppearance(prefs.theme)
   // The worker pool is created once, warmed up with the theme in use at startup.
   const [highlighter] = useState(() => ({ theme: { light: theme.light, dark: theme.dark } }))
+  const [gotoOpen, setGotoOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const view = useRef<DiffViewHandle>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -80,16 +84,49 @@ export default function App() {
     const next = entries[active + by]
     if (next) jumpToFile(next.id)
   }
-  useHotkey('j', () => step(1))
-  useHotkey('k', () => step(-1))
-  useHotkey('mod+b', toggleSidebar)
-  useHotkey('v', () => {
+  const toggleViewedActive = () => {
     const e = entries[active]
     if (!e) return
     toggleViewed(e)
     // Marking a file viewed moves on to the next one.
     if (!isViewed(e)) step(1)
-  })
+  }
+  const copyForAI = () => navigator.clipboard.writeText(reviewPrompt(subjectOf(source), comments, entries))
+
+  // Built only while the menu is open: App re-renders on every scroll.
+  const actions = () =>
+    gotoActions({
+      prefs,
+      dark,
+      sidebarOpen: sidebar === 'open',
+      allCollapsed,
+      hasComments: comments.length > 0,
+      ignoreWhitespace: source?.kind === 'git' ? !!source.ignoreWhitespace : undefined,
+      canShowFullFiles: !!loadFiles,
+      do: {
+        toggleSidebar,
+        toggleAll,
+        next: () => step(1),
+        previous: () => step(-1),
+        toggleViewed: toggleViewedActive,
+        copyForAI,
+        toggleDiffStyle: () => setPref('diffStyle', prefs.diffStyle === 'split' ? 'unified' : 'split'),
+        toggleDark,
+        toggleWhitespace: () => source?.kind === 'git' && load({ ...source, ignoreWhitespace: !source.ignoreWhitespace }),
+        toggleFullFiles: () => setPref('fullFiles', !prefs.fullFiles),
+        toggleWrap: () => setPref('wrap', !prefs.wrap),
+        reload: () => source && load(source),
+        openFile: openFilePicker,
+        openSettings: () => setSettingsOpen(true),
+      },
+    })
+
+  useHotkey('mod+k', () => setGotoOpen((o) => !o))
+  useHotkey('?', () => setSettingsOpen((o) => !o))
+  useHotkey('j', () => step(1))
+  useHotkey('k', () => step(-1))
+  useHotkey('mod+b', toggleSidebar)
+  useHotkey('v', toggleViewedActive)
 
   return (
     <WorkerPoolContextProvider poolOptions={POOL} highlighterOptions={highlighter}>
@@ -107,7 +144,7 @@ export default function App() {
           onToggleSidebar={toggleSidebar}
           allCollapsed={allCollapsed}
           onToggleAll={toggleAll}
-          onCopyReview={() => navigator.clipboard.writeText(reviewPrompt(subjectOf(source), comments, entries))}
+          onCopyReview={copyForAI}
           onClearComments={clearComments}
         >
           <Settings
@@ -116,12 +153,20 @@ export default function App() {
             dark={dark}
             onToggleDark={toggleDark}
             canShowFullFiles={!!loadFiles}
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
           />
         </Toolbar>
 
         <div className="flex min-h-0 flex-1">
           <aside className={cn('w-72 shrink-0 border-r', sidebar === 'closed' && 'hidden')}>
-            <Sidebar entries={entries} activePath={entries[active]?.file.name} icons={prefs.icons} onSelect={jumpToFile} />
+            <Sidebar
+              entries={entries}
+              activePath={entries[active]?.file.name}
+              icons={prefs.icons}
+              onSelect={jumpToFile}
+              onGoTo={() => setGotoOpen(true)}
+            />
           </aside>
           <main
             className="min-w-0 flex-1"
@@ -150,6 +195,22 @@ export default function App() {
           </main>
         </div>
 
+        <GoTo
+          open={gotoOpen}
+          onOpenChange={setGotoOpen}
+          reviewKey={key}
+          entries={entries}
+          commits={source?.kind === 'git' ? commits : []}
+          commit={source?.kind === 'git' ? source.commit : undefined}
+          comments={comments}
+          actions={actions}
+          onFile={jumpToFile}
+          onCommit={(commit) => source?.kind === 'git' && load({ ...source, commit })}
+          onComment={(c) => {
+            expand(c.file)
+            view.current?.scrollToLine(c.file, c.end, c.side)
+          }}
+        />
         <input
           ref={fileInput}
           type="file"

@@ -8,7 +8,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useHotkey } from '@/hooks/use-hotkey'
 import { ICON_PACKS, type Prefs, type SetPref } from '@/hooks/use-prefs'
 import { BUNDLED_FONTS, installedFonts } from '@/lib/fonts'
 import { THEMES } from '@/lib/themes'
@@ -16,7 +15,8 @@ import { THEMES } from '@/lib/themes'
 const SHORTCUTS = [
   [['j', 'k'], 'Next / previous file'],
   [['v'], 'Mark file as viewed'],
-  [['/'], 'Search files'],
+  [['⌘', 'K'], 'Go to a file, commit or action'],
+  [['/'], 'Filter the file tree'],
   [['⌘', 'B'], 'Toggle sidebar'],
   [['⌘', 'V'], 'View a diff from the clipboard'],
   [['?'], 'This panel'],
@@ -68,6 +68,8 @@ export function Settings({
   dark,
   onToggleDark,
   canShowFullFiles,
+  open,
+  onOpenChange,
 }: {
   prefs: Prefs
   setPref: SetPref
@@ -75,10 +77,10 @@ export function Settings({
   onToggleDark: () => void
   /** Full files need the repository; a pasted patch only has its hunks. */
   canShowFullFiles: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
   const [installed] = useState(installedFonts)
-  useHotkey('?', () => setOpen((o) => !o))
 
   const fonts = [
     { options: [{ value: '', label: 'Default' }] },
@@ -87,7 +89,7 @@ export function Settings({
   ]
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon-sm" title="Settings and shortcuts (?)">
           <Settings2 />
