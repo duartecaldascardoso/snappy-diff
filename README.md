@@ -27,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/duartecaldascardoso/snappy-diff/mai
 irm https://raw.githubusercontent.com/duartecaldascardoso/snappy-diff/main/install.ps1 | iex
 ```
 
-One ~3 MB binary. No Node, no Rust, nothing else to install.
+One ~4 MB download. No Node, no Rust, nothing else to install.
 
 ## Use
 
