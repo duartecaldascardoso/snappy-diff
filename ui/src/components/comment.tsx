@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { Card, CardAction, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupText,
+  InputGroupTextarea,
+} from '@/components/ui/input-group'
 import type { Comment } from '@/lib/review'
 
 const lines = (c: Comment) => (c.start === c.end ? `Line ${c.end}` : `Lines ${c.start}–${c.end}`)
@@ -15,18 +22,20 @@ export function CommentCard({
   onDelete: () => void
 }) {
   return (
-    <div className="m-2 max-w-3xl rounded-md border bg-background px-3 py-2 font-sans text-[13px] shadow-xs">
-      <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-        <span className="mr-auto">{lines(comment)}</span>
-        <Button variant="ghost" size="xs" onClick={onEdit}>
-          Edit
-        </Button>
-        <Button variant="ghost" size="xs" onClick={onDelete}>
-          Delete
-        </Button>
-      </div>
-      <p className="whitespace-pre-wrap">{comment.text}</p>
-    </div>
+    <Card className="m-2 max-w-3xl gap-1 py-2 font-sans text-[13px]">
+      <CardHeader className="items-center gap-0 px-3">
+        <CardDescription className="text-xs">{lines(comment)}</CardDescription>
+        <CardAction>
+          <Button variant="ghost" size="xs" onClick={onEdit}>
+            Edit
+          </Button>
+          <Button variant="ghost" size="xs" onClick={onDelete}>
+            Delete
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="px-3 whitespace-pre-wrap">{comment.text}</CardContent>
+    </Card>
   )
 }
 
@@ -42,13 +51,11 @@ export function CommentEditor({
   const [text, setText] = useState(comment.text)
   const save = () => text.trim() && onSave({ ...comment, text: text.trim() })
   return (
-    <div className="m-2 max-w-3xl rounded-md border bg-background p-2 font-sans text-[13px] shadow-xs">
-      <div className="mb-1 px-1 text-xs text-muted-foreground">{lines(comment)}</div>
-      <Textarea
+    <InputGroup className="m-2 w-auto max-w-3xl bg-background font-sans">
+      <InputGroupTextarea
         autoFocus
         value={text}
         rows={3}
-        className="min-h-16 text-[13px]"
         placeholder="Leave a comment"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -59,16 +66,17 @@ export function CommentEditor({
           }
           if (e.key === 'Escape') onCancel()
         }}
+        className="min-h-16 text-[13px]"
       />
-      <div className="mt-1 flex items-center justify-end gap-1">
-        <span className="mr-auto px-1 text-xs text-muted-foreground">↵ to save, ⇧↵ for a new line</span>
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+      <InputGroupAddon align="block-end">
+        <InputGroupText className="text-xs">{lines(comment)} · ↵ to save, ⇧↵ for a new line</InputGroupText>
+        <InputGroupButton size="sm" className="ml-auto" onClick={onCancel}>
           Cancel
-        </Button>
-        <Button size="sm" disabled={!text.trim()} onClick={save}>
+        </InputGroupButton>
+        <InputGroupButton size="sm" variant="default" disabled={!text.trim()} onClick={save}>
           Comment
-        </Button>
-      </div>
-    </div>
+        </InputGroupButton>
+      </InputGroupAddon>
+    </InputGroup>
   )
 }

@@ -31,6 +31,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
+          # npm ci refuses a lockfile written by a different npm major, which
+          # broke releases on Node 22 (npm 10). Node 24 ships npm 11, like local dev.
           node-version: 24
           cache: npm
           cache-dependency-path: ui/package-lock.json
