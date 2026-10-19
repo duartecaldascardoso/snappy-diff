@@ -47,6 +47,8 @@ struct Range {
     head: Option<String>,
     /// Ignore whitespace changes.
     w: Option<String>,
+    /// Show just this commit.
+    commit: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -58,6 +60,7 @@ pub fn router(app: App) -> Router {
     Router::new()
         .route("/api/meta", get(meta))
         .route("/api/diff", get(diff))
+        .route("/api/commits", get(commits))
         .route("/api/blob/{oid}", get(blob))
         .route("/api/file", get(file))
         .fallback(asset)
@@ -87,19 +90,36 @@ async fn meta(State(app): State<Arc<App>>) -> Json<Meta> {
     })
 }
 
-/// With `?base=&head=`, diffs the two refs; without, returns the CLI's patch.
+/// With `?base=&head=` (an empty head is the working tree) or `?commit=`, diffs
+/// the repository; with neither, returns the CLI's patch.
 async fn diff(State(app): State<Arc<App>>, Query(range): Query<Range>) -> Response {
-    let result = match (range, &app.repo, &app.patch) {
-        (Range { base: Some(base), head: Some(head), w }, Some(repo), _) => {
-            let head = (!head.is_empty()).then_some(head.as_str());
-            git::diff(repo, &base, head, w.is_some()).await
+    match patch(&app, range).await {
+        Ok(patch) => text(StatusCode::OK, patch),
+        Err(e) => text(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+async fn patch(app: &App, range: Range) -> Result<Vec<u8>, String> {
+    let ignore_whitespace = range.w.is_some();
+    match (range, &app.repo, &app.patch) {
+        (Range { commit: Some(sha), .. }, Some(repo), _) => git::show(repo, &sha, ignore_whitespace).await,
+        (Range { base: Some(base), head: Some(head), .. }, Some(repo), _) if head.is_empty() => {
+            let mut patch = git::diff(repo, &base, None, ignore_whitespace).await?;
+            patch.extend(git::untracked_patch(repo).await);
+            Ok(patch)
+        }
+        (Range { base: Some(base), head: Some(head), .. }, Some(repo), _) => {
+            git::diff(repo, &base, Some(&head), ignore_whitespace).await
         }
         (Range { base: None, head: None, .. }, _, Some((_, patch))) => Ok(patch.clone().into_bytes()),
         _ => Err("nothing to diff".into()),
-    };
-    match result {
-        Ok(patch) => text(StatusCode::OK, patch),
-        Err(e) => text(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+async fn commits(State(app): State<Arc<App>>, Query(range): Query<Range>) -> Json<Vec<git::Commit>> {
+    match (&app.repo, range.base, range.head) {
+        (Some(repo), Some(base), Some(head)) if !head.is_empty() => Json(git::commits(repo, &base, &head).await),
+        _ => Json(Vec::new()),
     }
 }
 

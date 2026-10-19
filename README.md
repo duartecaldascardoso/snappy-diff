@@ -30,7 +30,9 @@ git diff | snappy-diff -    # a diff from stdin
 
 You can also drop or paste a diff into the page.
 
-`/` searches files, `j` / `k` jump between files, `⌘B` toggles the sidebar.
+Mark files as viewed (`v`), comment on lines from the gutter, and copy the
+review as Markdown for a pull request or an agent. Press `?` for settings and
+shortcuts.
 
 ## Build from source
 

@@ -3,6 +3,7 @@ import DiffWorker from '@pierre/diffs/worker/worker.js?worker'
 import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react'
 import { DiffView, type DiffViewHandle } from '@/components/diff-view'
 import { EmptyState } from '@/components/empty-state'
+import { Settings, SETTINGS_ID } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
 import { Toolbar } from '@/components/toolbar'
 import { useCollapsed } from '@/hooks/use-collapsed'
@@ -10,8 +11,11 @@ import { useDiff } from '@/hooks/use-diff'
 import { useHotkey } from '@/hooks/use-hotkey'
 import { usePatchInput } from '@/hooks/use-patch-input'
 import { usePersisted } from '@/hooks/use-persisted'
+import { usePrefs } from '@/hooks/use-prefs'
+import { useReview } from '@/hooks/use-review'
 import { useTheme } from '@/hooks/use-theme'
-import { fileLoader, THEME, WORKTREE } from '@/lib/diff'
+import { type Entry, fileLoader, type Source, THEME, WORKTREE } from '@/lib/diff'
+import { reviewMarkdown } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
 // Syntax highlighting runs off the main thread.
@@ -21,14 +25,20 @@ const POOL = {
 }
 const HIGHLIGHTER = { theme: THEME }
 
+const titleOf = (s?: Source) =>
+  s?.kind !== 'git' ? (s?.name ?? 'diff') : s.commit ? s.commit.slice(0, 7) : `${s.base}...${s.head || 'working tree'}`
+
 export default function App() {
-  const { source, refs, entries, loading, error, ms, load } = useDiff()
-  const { collapsed, allCollapsed, toggle, expand, toggleAll } = useCollapsed(entries)
+  const { source, key, refs, commits, entries, loading, error, ms, load } = useDiff()
+  const review = useReview(key, entries)
+  const { isViewed, toggleViewed: flipViewed, comments, clearComments } = review
+  // Viewed, generated and huge files start collapsed.
+  const byDefault = useCallback((e: Entry) => isViewed(e) || e.generated || e.large, [isViewed])
+  const { collapsed, allCollapsed, toggle, expand, reset, toggleAll } = useCollapsed(key, entries, byDefault)
   const [active, setActive] = useState(0)
-  const [diffStyle, setDiffStyle] = usePersisted<'split' | 'unified'>('diffStyle', 'split')
+  const [prefs, setPref] = usePrefs()
   const [sidebar, setSidebar] = usePersisted<'open' | 'closed'>('sidebar', 'open')
   const [dark, toggleDark] = useTheme()
-  const [font, setFont] = usePersisted<string>('font', '')
   const view = useRef<DiffViewHandle>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -36,9 +46,8 @@ export default function App() {
   const dragging = usePatchInput(openPatch)
   const openFilePicker = () => fileInput.current?.click()
   const toggleSidebar = () => setSidebar(sidebar === 'open' ? 'closed' : 'open')
-  useHotkey('mod+b', toggleSidebar)
 
-  const worktree = source?.kind === 'git' ? source.head === WORKTREE : undefined
+  const worktree = source?.kind === 'git' ? source.head === WORKTREE && !source.commit : undefined
   const loadFiles = useMemo(() => (worktree == null ? undefined : fileLoader(worktree)), [worktree])
 
   const jumpToFile = useCallback(
@@ -48,12 +57,31 @@ export default function App() {
     },
     [expand],
   )
+
+  // A file follows its viewed state again (collapsing once viewed).
+  const toggleViewed = useCallback(
+    (e: Entry) => {
+      flipViewed(e)
+      reset(e.id)
+    },
+    [flipViewed, reset],
+  )
+
   const step = (by: number) => {
     const next = entries[active + by]
     if (next) jumpToFile(next.id)
   }
   useHotkey('j', () => step(1))
   useHotkey('k', () => step(-1))
+  useHotkey('mod+b', toggleSidebar)
+  useHotkey('?', () => document.getElementById(SETTINGS_ID)?.togglePopover())
+  useHotkey('v', () => {
+    const e = entries[active]
+    if (!e) return
+    toggleViewed(e)
+    // Marking a file viewed moves on to the next one.
+    if (!isViewed(e)) step(1)
+  })
 
   return (
     <WorkerPoolContextProvider poolOptions={POOL} highlighterOptions={HIGHLIGHTER}>
@@ -61,20 +89,27 @@ export default function App() {
         <Toolbar
           source={source}
           refs={refs}
+          commits={commits}
           entries={entries}
+          viewed={review.viewedCount}
+          comments={comments.length}
           ms={ms}
           onLoad={load}
           onOpen={openFilePicker}
           onToggleSidebar={toggleSidebar}
           allCollapsed={allCollapsed}
           onToggleAll={toggleAll}
-          diffStyle={diffStyle}
-          onToggleDiffStyle={() => setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')}
-          dark={dark}
-          onToggleDark={toggleDark}
-          font={font}
-          onFontChange={setFont}
-        />
+          onCopyReview={() => navigator.clipboard.writeText(reviewMarkdown(titleOf(source), comments, entries))}
+          onClearComments={clearComments}
+        >
+          <Settings
+            prefs={prefs}
+            setPref={setPref}
+            dark={dark}
+            onToggleDark={toggleDark}
+            canShowFullFiles={!!loadFiles}
+          />
+        </Toolbar>
 
         <div className="flex min-h-0 flex-1">
           <aside className={cn('w-72 shrink-0 border-r', sidebar === 'closed' && 'hidden')}>
@@ -82,16 +117,19 @@ export default function App() {
           </aside>
           <main
             className="min-w-0 flex-1"
-            style={font ? ({ '--diffs-font-family': `"${font}", monospace` } as CSSProperties) : undefined}
+            style={prefs.font ? ({ '--diffs-font-family': `"${prefs.font}", monospace` } as CSSProperties) : undefined}
           >
             {entries.length > 0 ? (
               <DiffView
                 ref={view}
+                viewKey={key}
                 entries={entries}
                 collapsed={collapsed}
                 onToggle={toggle}
                 onActiveChange={setActive}
-                diffStyle={diffStyle}
+                review={review}
+                onToggleViewed={toggleViewed}
+                prefs={prefs}
                 dark={dark}
                 loadFiles={loadFiles}
               />

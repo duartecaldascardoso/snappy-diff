@@ -9,5 +9,5 @@ export default defineConfig({
   // `npm run dev` talks to a running `snappy-diff --no-open`.
   server: { proxy: { '/api': 'http://localhost:4747' } },
   worker: { format: 'es' },
-  build: { target: 'es2023', chunkSizeWarningLimit: 2000 },
+  build: { target: 'es2024', chunkSizeWarningLimit: 2000 },
 })

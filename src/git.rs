@@ -6,6 +6,7 @@ use std::{
     process::Stdio,
 };
 
+use serde::Serialize;
 use tokio::process::Command;
 
 /// Runs `git -C <repo> <args>`, returning stdout or git's error message.
@@ -96,6 +97,84 @@ pub async fn diff(repo: &Path, base: &str, head: Option<&str>, ignore_whitespace
     }
     args.push("--");
     run(repo, &args).await
+}
+
+/// One commit, as listed in the commit picker.
+#[derive(Serialize)]
+pub struct Commit {
+    sha: String,
+    subject: String,
+    author: String,
+    date: String,
+}
+
+/// Commits in `base..head`, newest first.
+pub async fn commits(repo: &Path, base: &str, head: &str) -> Vec<Commit> {
+    if base.starts_with('-') || head.starts_with('-') {
+        return Vec::new();
+    }
+    let range = format!("{base}..{head}");
+    let format = "--format=%H%x1f%s%x1f%an%x1f%ar";
+    let Ok(out) = run(repo, &["log", format, "--max-count=500", &range, "--"]).await else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&out)
+        .lines()
+        .filter_map(|line| {
+            let mut f = line.split('\x1f').map(str::to_owned);
+            Some(Commit { sha: f.next()?, subject: f.next()?, author: f.next()?, date: f.next()? })
+        })
+        .collect()
+}
+
+/// What a single commit changed (against its first parent for merges).
+pub async fn show(repo: &Path, sha: &str, ignore_whitespace: bool) -> Result<Vec<u8>, String> {
+    if sha.starts_with('-') {
+        return Err("invalid commit".into());
+    }
+    let mut args = vec!["show", "--format=", "--no-color", "--no-ext-diff", "--full-index", "-M"];
+    args.push("--diff-merges=first-parent");
+    if ignore_whitespace {
+        args.push("-w");
+    }
+    args.extend([sha, "--"]);
+    run(repo, &args).await
+}
+
+/// Files too big to be worth rendering are listed but not shown.
+const MAX_UNTRACKED_BYTES: usize = 1 << 20;
+
+/// Untracked files as a patch adding them, so new files show up next to
+/// the edits. Written directly instead of spawning `git diff` per file.
+pub async fn untracked_patch(repo: &Path) -> Vec<u8> {
+    let Ok(list) = run(repo, &["ls-files", "--others", "--exclude-standard", "-z"]).await else {
+        return Vec::new();
+    };
+    let mut patch = Vec::new();
+    for path in String::from_utf8_lossy(&list).split('\0').filter(|p| !p.is_empty()) {
+        let Ok(contents) = tokio::fs::read(repo.join(path)).await else {
+            continue;
+        };
+        patch.extend(format!("diff --git a/{path} b/{path}\nnew file mode 100644\n").as_bytes());
+        if contents.is_empty() {
+            continue;
+        }
+        let binary = contents.len() > MAX_UNTRACKED_BYTES || contents[..contents.len().min(8000)].contains(&0);
+        if binary {
+            patch.extend(format!("Binary files /dev/null and b/{path} differ\n").as_bytes());
+            continue;
+        }
+        let lines = contents.split_inclusive(|&b| b == b'\n').count();
+        patch.extend(format!("--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{lines} @@\n").as_bytes());
+        for line in contents.split_inclusive(|&b| b == b'\n') {
+            patch.push(b'+');
+            patch.extend(line);
+        }
+        if contents.last() != Some(&b'\n') {
+            patch.extend(b"\n\\ No newline at end of file\n");
+        }
+    }
+    patch
 }
 
 /// A file as it currently is on disk; uncommitted contents have no blob yet.

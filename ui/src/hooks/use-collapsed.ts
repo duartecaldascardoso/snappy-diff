@@ -1,29 +1,42 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { Entry } from '@/lib/diff'
 
-const NONE: ReadonlySet<string> = new Set()
+const NONE: ReadonlyMap<string, boolean> = new Map()
 
-/** Which files are collapsed. Tied to `entries`, so a new diff starts fully expanded. */
-export function useCollapsed(entries: Entry[]) {
-  const [state, setState] = useState({ entries, ids: NONE })
-  const collapsed = state.entries === entries ? state.ids : NONE
+/**
+ * Which files are collapsed. Files follow `byDefault` (viewed, generated…)
+ * until toggled by hand; switching to another diff (`key`) forgets the toggles.
+ */
+export function useCollapsed(key: string, entries: Entry[], byDefault: (e: Entry) => boolean) {
+  const [state, setState] = useState({ key, overrides: NONE })
+  const overrides = state.key === key ? state.overrides : NONE
 
-  const update = useCallback(
-    (change: (ids: Set<string>) => void) =>
+  const collapsed = useMemo(
+    () => new Set(entries.filter((e) => overrides.get(e.id) ?? byDefault(e)).map((e) => e.id)),
+    [entries, overrides, byDefault],
+  )
+
+  /** `undefined` hands the files back to their default. */
+  const set = useCallback(
+    (ids: string[], value?: boolean) =>
       setState((prev) => {
-        const ids = new Set(prev.entries === entries ? prev.ids : NONE)
-        change(ids)
-        return { entries, ids }
+        const next = new Map(prev.key === key ? prev.overrides : NONE)
+        for (const id of ids) {
+          if (value == null) next.delete(id)
+          else next.set(id, value)
+        }
+        return { key, overrides: next }
       }),
-    [entries],
+    [key],
   )
 
   const allCollapsed = entries.length > 0 && collapsed.size === entries.length
   return {
     collapsed,
     allCollapsed,
-    toggle: useCallback((id: string) => update((ids) => void (ids.delete(id) || ids.add(id))), [update]),
-    expand: useCallback((id: string) => update((ids) => void ids.delete(id)), [update]),
-    toggleAll: () => setState({ entries, ids: allCollapsed ? NONE : new Set(entries.map((e) => e.id)) }),
+    toggle: useCallback((id: string) => set([id], !collapsed.has(id)), [set, collapsed]),
+    expand: useCallback((id: string) => set([id], false), [set]),
+    reset: useCallback((id: string) => set([id]), [set]),
+    toggleAll: () => set(entries.map((e) => e.id), !allCollapsed),
   }
 }
