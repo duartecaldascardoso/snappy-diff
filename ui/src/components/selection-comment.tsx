@@ -21,10 +21,11 @@ const sideOf = (line: HTMLElement): AnnotationSide =>
  */
 function readSelection(container: HTMLElement): Selected | null {
   const selection = document.getSelection()
-  if (!selection || selection.isCollapsed || !selection.getComposedRanges) return null
+  if (!selection?.getComposedRanges) return null
   const roots = [...container.querySelectorAll('diffs-container')].flatMap((h) => h.shadowRoot ?? [])
   const [range] = selection.getComposedRanges({ shadowRoots: roots })
-  if (!range) return null
+  // Not selection.isCollapsed: Chrome reports a selection inside a shadow root as collapsed.
+  if (!range || range.collapsed) return null
   let first = lineOf(range.startContainer)
   let last = lineOf(range.endContainer)
   if (!first || !last) return null
@@ -40,10 +41,22 @@ function readSelection(container: HTMLElement): Selected | null {
   // Selecting whole lines ends at the very start of the next one; don't count it.
   if (range.endOffset === 0 && end > start) end--
   if (start > end) [start, end] = [end, start]
-  const caret = document.createRange()
-  caret.setStart(range.endContainer, range.endOffset)
-  const rect = caret.getBoundingClientRect()
-  return { file, side, start, end, x: rect.right, y: rect.bottom }
+  return { file, side, start, end, ...anchor(range, last) }
+}
+
+/**
+ * Where the button goes: just past the selection's last piece of text. A
+ * triple-click ends the selection at the start of the next line, a spot with
+ * no box of its own (it measures as 0,0), so read the selected text's boxes and
+ * fall back to the last selected line.
+ */
+function anchor(range: StaticRange, last: HTMLElement) {
+  const live = document.createRange()
+  live.setStart(range.startContainer, range.startOffset)
+  live.setEnd(range.endContainer, range.endOffset)
+  const boxes = [...live.getClientRects()].filter((r) => r.width > 0 && r.height > 0)
+  const box = boxes.at(-1) ?? last.getBoundingClientRect()
+  return { x: box.right, y: box.bottom }
 }
 
 /** A "Comment" button at the end of a text selection in the diff (or press `c`). */
@@ -61,7 +74,7 @@ export function SelectionComment({
     if (!el) return
     // Read once the selection settles, not on every move while dragging.
     const settle = () => requestAnimationFrame(() => setSelected(readSelection(el)))
-    const clear = () => document.getSelection()?.isCollapsed && setSelected(null)
+    const clear = () => !document.getSelection()?.toString() && setSelected(null)
     const hide = () => setSelected(null)
     el.addEventListener('pointerup', settle)
     el.addEventListener('keyup', settle)
