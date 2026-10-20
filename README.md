@@ -71,3 +71,7 @@ Or drop, paste or open a diff exported from GitHub or GitLab right in the page.
 npm --prefix ui ci && npm --prefix ui run build
 cargo install --path .
 ```
+
+<!-- Throwaway lines to test "Send to GitHub". This PR will be closed. -->
+<!-- Line two of the test change. -->
+<!-- Line three of the test change. -->
