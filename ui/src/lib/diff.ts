@@ -56,9 +56,15 @@ export const gitQuery = (s: Source) => {
   return `?${params}`
 }
 
+/** Enough of a patch to tell it apart, without hashing tens of megabytes. */
+const fingerprint = (text: string) =>
+  text.length > 1 << 17 ? `${text.length}:${text.slice(0, 1 << 16)}${text.slice(-(1 << 16))}` : text
+
 /** Identifies what is being reviewed, for remembering progress and comments. */
 export const reviewKey = (s: Source, text: string) =>
-  s.kind === 'git' ? `${s.base}...${s.head || 'worktree'}${s.commit ? `@${s.commit}` : ''}` : `patch:${hash(text).toString(36)}`
+  s.kind === 'git'
+    ? `${s.base}...${s.head || 'worktree'}${s.commit ? `@${s.commit}` : ''}`
+    : `patch:${hash(fingerprint(text)).toString(36)}`
 
 export async function fetchPatch(source: Source): Promise<string> {
   if (source.kind === 'patch' && source.text != null) return source.text

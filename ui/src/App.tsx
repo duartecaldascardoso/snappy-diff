@@ -1,7 +1,7 @@
 import { WorkerPoolContextProvider } from '@pierre/diffs/react'
 import DiffWorker from '@pierre/diffs/worker/worker.js?worker'
 import { ChartNoAxesColumn } from 'lucide-react'
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { DiffView, type DiffViewHandle } from '@/components/diff-view'
 import { EmptyState } from '@/components/empty-state'
 import { GoTo, type GoToKind } from '@/components/goto'
@@ -79,8 +79,9 @@ export default function App() {
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [filter, setFilter] = useState('')
   const [churn, setChurn] = useState(new Map<string, number>())
-  // Moved code, found once per diff.
-  const moves = useMemo(() => findMoves(entries), [entries])
+  // Moved code, found once per diff, just after it first paints so it never delays it.
+  const settled = useDeferredValue(entries)
+  const moves = useMemo(() => findMoves(settled), [settled])
 
   // When a refresh shows commented code changed (an agent at work, say), say so.
   const outdated = useRef<{ key: string; ids: Set<string> } | null>(null)
