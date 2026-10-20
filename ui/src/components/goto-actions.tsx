@@ -12,14 +12,16 @@ import {
   Rows2,
   Settings2,
   Sparkles,
-  SquareArrowOutUpRight,
   StepBack,
   StepForward,
   Sun,
   WrapText,
 } from 'lucide-react'
+import { EditorLogo } from '@/components/editor-logo'
+import { GithubIcon } from '@/components/github-icon'
 import type { Action } from '@/components/goto'
 import type { Prefs } from '@/hooks/use-prefs'
+import { EDITORS } from '@/lib/editor'
 import { MOD } from '@/lib/shortcut'
 
 type Context = {
@@ -47,6 +49,8 @@ type Context = {
     openFile: () => void
     /** Absent without a repository. */
     openInEditor?: () => void
+    /** Absent unless reviewing a pull request with comments to post. */
+    sendToGitHub?: () => void
     openSettings: () => void
   }
 }
@@ -60,11 +64,18 @@ export function gotoActions(c: Context): Action[] {
     { id: 'viewed', label: 'Mark file as viewed', icon: <CircleCheck />, keys: ['V'], run: c.do.toggleViewed },
     !!c.do.openInEditor && {
       id: 'editor',
-      label: 'Open file in editor',
-      icon: <SquareArrowOutUpRight />,
+      label: `Open file in ${EDITORS[c.prefs.editor]}`,
+      icon: <EditorLogo editor={c.prefs.editor} />,
       keys: ['O'],
       words: 'vscode cursor zed',
       run: c.do.openInEditor,
+    },
+    !!c.do.sendToGitHub && {
+      id: 'github',
+      label: 'Send comments to GitHub',
+      icon: <GithubIcon />,
+      words: 'pull request review post',
+      run: c.do.sendToGitHub,
     },
     c.hasComments && { id: 'ai', label: 'Copy comments for AI', icon: <Sparkles />, words: 'review prompt clipboard', run: c.do.copyForAI },
     {

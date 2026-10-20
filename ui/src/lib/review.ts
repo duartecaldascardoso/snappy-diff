@@ -14,6 +14,8 @@ export type Comment = {
   code?: string
   /** Set when that code is no longer in the diff, most likely because it was addressed. */
   outdated?: boolean
+  /** Posted to the pull request already, so it isn't sent twice. */
+  sent?: boolean
 }
 
 export type Review = {

@@ -32,6 +32,7 @@ export function CommentCard({
         <CardDescription className="flex items-center gap-2 text-xs">
           {lines(comment)}
           {comment.outdated && <Badge variant="secondary">Code changed</Badge>}
+          {comment.sent && <Badge variant="outline">On GitHub</Badge>}
         </CardDescription>
         <CardAction>
           {comment.outdated ? (

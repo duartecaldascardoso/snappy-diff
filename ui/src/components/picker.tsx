@@ -33,6 +33,7 @@ export function Picker({
             {g.label && <SelectLabel>{g.label}</SelectLabel>}
             {g.options.map((o) => (
               <SelectItem key={o.value} value={encode(o.value)} title={o.title} className="text-xs">
+                {o.icon}
                 {o.label}
               </SelectItem>
             ))}

@@ -11,6 +11,7 @@ import {
   reviewKey,
   type Source,
 } from '@/lib/diff'
+import { fetchPr, type PullRequest } from '@/lib/github'
 
 type State = {
   source?: Source
@@ -27,6 +28,8 @@ const REFRESH_MS = 1500
 export function useDiff() {
   const [refs, setRefs] = useState<string[]>([])
   const [canOpen, setCanOpen] = useState(false)
+  // The PR and the head it belongs to: it applies only while that head is shown.
+  const [pr, setPr] = useState<{ pr: PullRequest; head: string } | null>(null)
   const [commits, setCommits] = useState<Commit[]>([])
   const [state, setState] = useState<State>({ key: '', entries: [], loading: true })
   const request = useRef(0)
@@ -60,14 +63,24 @@ export function useDiff() {
         setCanOpen(meta.canOpen)
         const params = new URLSearchParams(location.search)
         if (meta.mode === 'patch') load({ kind: 'patch', name: meta.patchName ?? 'patch' })
-        else if (meta.mode === 'git')
-          load({
+        else if (meta.mode === 'git') {
+          const first: Source = {
             kind: 'git',
             base: params.get('base') ?? meta.base,
             head: params.get('head') ?? meta.head,
             commit: params.get('commit') ?? undefined,
             ignoreWhitespace: params.has('w'),
+          }
+          load(first)
+          const rev = request.current
+          // Looked up after the first diff shows, so it never slows startup.
+          fetchPr().then(({ pr, base }) => {
+            if (!pr) return
+            setPr({ pr, head: meta.head })
+            // A detected PR knows its real base; switch unless you've moved on.
+            if (base && base !== first.base && !params.has('base') && rev === request.current) load({ ...first, base })
           })
+        }
         else setState({ key: '', entries: [], loading: false })
       })
       .catch((e) => setState({ key: '', entries: [], loading: false, error: String(e) }))
@@ -103,5 +116,9 @@ export function useDiff() {
     }
   }, [source, loading])
 
-  return { ...state, refs, commits, canOpen, load }
+  // Only while its branch is what's shown, in full.
+  const s = state.source
+  const activePr = pr && s?.kind === 'git' && s.head === pr.head && !s.commit ? pr.pr : undefined
+
+  return { ...state, refs, commits, canOpen, pr: activePr, load }
 }

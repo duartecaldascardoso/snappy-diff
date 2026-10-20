@@ -8,15 +8,17 @@ import {
   type LineAnnotation,
   useWorkerPool,
 } from '@pierre/diffs/react'
-import { ChevronDown, ChevronRight, MessageSquare, SquareArrowOutUpRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { CommentCard, CommentEditor } from '@/components/comment'
+import { EditorLogo } from '@/components/editor-logo'
 import { HEADER_HEIGHT, PinnedHeader } from '@/components/pinned-header'
 import { type LineRange, SelectionComment } from '@/components/selection-comment'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { ReviewState } from '@/hooks/use-review'
 import type { Prefs } from '@/hooks/use-prefs'
 import { type Entry, hash } from '@/lib/diff'
+import { EDITORS } from '@/lib/editor'
 import { linesText } from '@/lib/lines'
 import type { Comment } from '@/lib/review'
 import type { Theme } from '@/lib/themes'
@@ -127,7 +129,9 @@ export function DiffView({
       if (editing?.file === e.id) notes.push({ comment: editing, editing: true })
       const isCollapsed = collapsed.has(e.id)
       // CodeView only re-reads an item when its version changes.
-      const state = notes.map((n) => `${n.comment.id}${n.editing}${n.comment.text}`).join()
+      const state = notes
+        .map(({ comment: c, editing }) => `${c.id}${editing}${c.text}${c.start}${c.end}${c.sent}${c.outdated}`)
+        .join()
       return {
         id: e.id,
         type: 'diff',
@@ -222,11 +226,11 @@ export function DiffView({
           {onOpen && e.file.type !== 'deleted' && (
             <button
               type="button"
-              title="Open in editor (o)"
+              title={`Open in ${EDITORS[prefs.editor]} (o)`}
               onClick={() => onOpen(e)}
               className="inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             >
-              <SquareArrowOutUpRight className="size-3.5" />
+              <EditorLogo editor={prefs.editor} className="size-3.5" />
             </button>
           )}
           {count > 0 && (
@@ -242,7 +246,7 @@ export function DiffView({
         </span>
       )
     },
-    [byId, isViewed, onToggleViewed, onOpen],
+    [byId, isViewed, onToggleViewed, onOpen, prefs.editor],
   )
 
   const closeEditor = useCallback(() => {
@@ -285,6 +289,7 @@ export function DiffView({
           viewed={isViewed(pinnedEntry)}
           onCollapse={() => onToggle(pinnedEntry.id)}
           onToggleViewed={() => onToggleViewed(pinnedEntry)}
+          editor={prefs.editor}
           onOpen={onOpen && pinnedEntry.file.type !== 'deleted' ? () => onOpen(pinnedEntry) : undefined}
         />
       )}

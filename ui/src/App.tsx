@@ -18,6 +18,7 @@ import { useReview } from '@/hooks/use-review'
 import { useAppearance } from '@/hooks/use-appearance'
 import { type Entry, fileLoader, type Source, WORKTREE } from '@/lib/diff'
 import { firstChange, openInEditor } from '@/lib/editor'
+import { sendReview } from '@/lib/github'
 import { fontFamily } from '@/lib/fonts'
 import { reviewPrompt } from '@/lib/review'
 import { cn } from '@/lib/utils'
@@ -39,9 +40,9 @@ const subjectOf = (s?: Source) =>
         : `the changes in \`${s.base}...${s.head}\``
 
 export default function App() {
-  const { source, key, refs, commits, canOpen, entries, loading, error, ms, load } = useDiff()
+  const { source, key, refs, commits, canOpen, pr, entries, loading, error, ms, load } = useDiff()
   const review = useReview(key, entries)
-  const { isViewed, toggleViewed: flipViewed, comments, active: activeComments, clearComments } = review
+  const { isViewed, toggleViewed: flipViewed, comments, active: activeComments, markSent, clearComments } = review
   // Viewed, generated and huge files start collapsed.
   const byDefault = useCallback((e: Entry) => isViewed(e) || e.generated || e.large, [isViewed])
   const { collapsed, allCollapsed, toggle, expand, reset, toggleAll } = useCollapsed(key, entries, byDefault)
@@ -99,6 +100,14 @@ export default function App() {
         : undefined,
     [canOpen, prefs.editor],
   )
+  const unsent = activeComments.filter((c) => !c.sent)
+  const sendToGitHub = pr
+    ? async () => {
+        const url = await sendReview(unsent, entries)
+        markSent(unsent.map((c) => c.id))
+        return url
+      }
+    : undefined
   const copyForAI = () => navigator.clipboard.writeText(reviewPrompt(subjectOf(source), comments, entries))
 
   // Built only while the menu is open: App re-renders on every scroll.
@@ -126,6 +135,7 @@ export default function App() {
         reload: () => source && load(source),
         openFile: openFilePicker,
       openInEditor: openFile && entries[active] ? () => openFile(entries[active]) : undefined,
+      sendToGitHub: sendToGitHub && unsent.length ? () => void sendToGitHub() : undefined,
         openSettings: () => setSettingsOpen(true),
       },
     })
@@ -158,6 +168,9 @@ export default function App() {
           onToggleAll={toggleAll}
           onCopyReview={copyForAI}
           onClearComments={clearComments}
+          pr={pr}
+          unsent={unsent.length}
+          onSendToGitHub={sendToGitHub}
         >
           <Settings
             prefs={prefs}

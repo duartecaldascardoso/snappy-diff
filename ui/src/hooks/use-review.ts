@@ -45,9 +45,15 @@ export function useReview(key: string, entries: Entry[]) {
     [update],
   )
 
+  const markSent = useCallback(
+    (ids: string[]) =>
+      update((r) => ({ ...r, comments: r.comments.map((c) => (ids.includes(c.id) ? { ...c, sent: true } : c)) })),
+    [update],
+  )
+
   const clearComments = useCallback(() => update((r) => ({ ...r, comments: [] })), [update])
 
-  return { comments, active, isViewed, viewedCount, toggleViewed, saveComment, deleteComment, clearComments }
+  return { comments, active, isViewed, viewedCount, toggleViewed, saveComment, deleteComment, markSent, clearComments }
 }
 
 export type ReviewState = ReturnType<typeof useReview>

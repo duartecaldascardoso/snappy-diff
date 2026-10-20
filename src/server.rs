@@ -12,7 +12,11 @@ use axum::{
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 
-use crate::{git, open};
+use crate::{
+    git,
+    github::{self, Pr, ReviewComment},
+    open,
+};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
@@ -28,6 +32,10 @@ pub struct App {
     pub base: String,
     /// Empty means the working tree.
     pub head: String,
+    /// The pull request under review: given on the command line, or detected.
+    pub pr: tokio::sync::OnceCell<Option<Pr>>,
+    /// Whether to look up the current branch's PR (no refs were given).
+    pub detect_pr: bool,
 }
 
 #[derive(Serialize)]
@@ -40,6 +48,19 @@ struct Meta {
     patch_name: Option<String>,
     /// Whether files can be opened in an editor (we are in a repository).
     can_open: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrInfo {
+    pr: Option<Pr>,
+    /// The PR's base, to diff against instead of the default branch guess.
+    base: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ReviewRequest {
+    comments: Vec<ReviewComment>,
 }
 
 #[derive(Deserialize)]
@@ -74,6 +95,8 @@ pub fn router(app: App) -> Router {
         .route("/api/file", get(file))
         // JSON only: a cross-site page can't send that without a CORS preflight we never allow.
         .route("/api/open", post(open_in_editor))
+        .route("/api/pr", get(pull_request))
+        .route("/api/github/review", post(review))
         .fallback(asset)
         .with_state(Arc::new(app))
 }
@@ -169,6 +192,39 @@ async fn open_in_editor(State(app): State<Arc<App>>, Json(req): Json<OpenRequest
             text(StatusCode::OK, "")
         }
         None => text(StatusCode::BAD_REQUEST, "unknown editor"),
+    }
+}
+
+/// The pull request under review. Detection runs `gh` once, on first ask, so it
+/// never holds up the first diff.
+async fn pull_request(State(app): State<Arc<App>>) -> Json<PrInfo> {
+    let Some(repo) = &app.repo else {
+        return Json(PrInfo { pr: None, base: None });
+    };
+    let detected = !app.pr.initialized();
+    let pr = app
+        .pr
+        .get_or_init(|| async { if app.detect_pr { github::pr(repo, None).await } else { None } })
+        .await
+        .clone();
+    // Only a detected PR moves the base; one given on the command line already set it.
+    let base = match &pr {
+        Some(pr) if detected => {
+            let base = format!("origin/{}", pr.base_ref_name);
+            git::run(repo, &["rev-parse", "--verify", "--quiet", &base]).await.ok().map(|_| base)
+        }
+        _ => None,
+    };
+    Json(PrInfo { pr, base })
+}
+
+async fn review(State(app): State<Arc<App>>, Json(req): Json<ReviewRequest>) -> Response {
+    let (Some(repo), Some(Some(pr))) = (&app.repo, app.pr.get()) else {
+        return text(StatusCode::BAD_REQUEST, "no pull request");
+    };
+    match github::post_review(repo, pr, &req.comments).await {
+        Ok(url) => text(StatusCode::OK, url),
+        Err(e) => text(StatusCode::BAD_GATEWAY, e),
     }
 }
 

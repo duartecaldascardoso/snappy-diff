@@ -1,7 +1,9 @@
-import { ChevronDown, SquareArrowOutUpRight } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
+import { EditorLogo } from '@/components/editor-logo'
 import { FileIcon } from '@/components/file-icon'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { Entry } from '@/lib/diff'
+import { EDITORS, type EditorId } from '@/lib/editor'
 
 /** Height of a file header in the diff view, which this bar stands in for. */
 export const HEADER_HEIGHT = 44
@@ -16,12 +18,14 @@ export function PinnedHeader({
   viewed,
   onCollapse,
   onToggleViewed,
+  editor,
   onOpen,
 }: {
   entry: Entry
   viewed: boolean
   onCollapse: () => void
   onToggleViewed: () => void
+  editor: EditorId
   onOpen?: () => void
 }) {
   return (
@@ -43,11 +47,11 @@ export function PinnedHeader({
         {onOpen && (
           <button
             type="button"
-            title="Open in editor (o)"
+            title={`Open in ${EDITORS[editor]} (o)`}
             onClick={onOpen}
             className="inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
-            <SquareArrowOutUpRight className="size-3.5" />
+            <EditorLogo editor={editor} className="size-3.5" />
           </button>
         )}
         <span className="tabular-nums">

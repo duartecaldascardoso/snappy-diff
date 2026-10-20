@@ -1,5 +1,6 @@
 import { Settings2 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { EditorLogo } from '@/components/editor-logo'
 import { Picker } from '@/components/picker'
 import { options } from '@/lib/options'
 import { Button } from '@/components/ui/button'
@@ -145,7 +146,7 @@ export function Settings({
           <Picker
             aria-label="Editor"
             value={prefs.editor}
-            groups={[{ options: Object.entries(EDITORS).map(([value, label]) => ({ value, label })) }]}
+            groups={[{ options: Object.entries(EDITORS).map(([value, label]) => ({ value, label, icon: <EditorLogo editor={value as EditorId} /> })) }]}
             onChange={(v) => setPref('editor', v as EditorId)}
             className={CONTROL}
           />
