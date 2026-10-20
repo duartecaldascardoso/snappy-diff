@@ -4,10 +4,13 @@ import { GithubIcon } from '@/components/github-icon'
 import { Picker } from '@/components/picker'
 import { options } from '@/lib/options'
 import { Button } from '@/components/ui/button'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Separator } from '@/components/ui/separator'
 import { Toggle } from '@/components/ui/toggle'
 import { cn } from '@/lib/utils'
 import { type Commit, type Entry, type GitSource, type Source, WORKTREE } from '@/lib/diff'
 import type { PullRequest } from '@/lib/github'
+import { breakdown, type Kind } from '@/lib/insights'
 
 function RefPicker({
   source,
@@ -87,20 +90,59 @@ function RefPicker({
   )
 }
 
-function Stats({ entries, viewed, ms }: { entries: Entry[]; viewed: number; ms?: number }) {
-  const { add, del } = useMemo(
-    () => entries.reduce((t, e) => ({ add: t.add + e.add, del: t.del + e.del }), { add: 0, del: 0 }),
-    [entries],
+const n = (v: number) => v.toLocaleString()
+
+/** One row of the breakdown: a kind (or the total) and its added and removed lines. */
+function KindRow({ label, add, del, onClick }: { label: string; add: number; del: number; onClick?: () => void }) {
+  const cells = (
+    <>
+      <span className="text-left">{label}</span>
+      <span className="text-right text-added">+{n(add)}</span>
+      <span className="text-right text-deleted">−{n(del)}</span>
+    </>
   )
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Show only ${label.toLowerCase()} files`}
+      className="col-span-3 grid grid-cols-subgrid rounded-md px-2 py-1 hover:bg-accent"
+    >
+      {cells}
+    </button>
+  ) : (
+    <div className="col-span-3 grid grid-cols-subgrid px-2 py-1 font-medium">{cells}</div>
+  )
+}
+
+function Stats({ entries, viewed, ms, onKind }: { entries: Entry[]; viewed: number; ms?: number; onKind: (kind: Kind) => void }) {
+  const kinds = useMemo(() => breakdown(entries), [entries])
   if (!entries.length) return null
+  const add = kinds.reduce((t, k) => t + k.add, 0)
+  const del = kinds.reduce((t, k) => t + k.del, 0)
   return (
-    <span className="mr-2 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+    <span className="mr-2 flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
       <span title="Files viewed">
         {viewed}/{entries.length} viewed
       </span>
-      <span className="ml-2 text-added">+{add}</span>
-      <span className="ml-1 text-deleted">−{del}</span>
-      {ms != null && <span className="ml-2">{ms.toFixed(0)} ms</span>}
+      {/* Hover for added and removed lines by kind: is it code, or mostly tests? */}
+      <HoverCard openDelay={150} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <button type="button" className="cursor-default underline decoration-muted-foreground/60 decoration-dotted underline-offset-4">
+            <span className="text-added">+{n(add)}</span> <span className="text-deleted">−{n(del)}</span>
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent align="end" className="w-auto min-w-56 p-2 text-sm tabular-nums">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-x-4">
+            {kinds.map((k) => (
+              <KindRow key={k.id} label={k.label} add={k.add} del={k.del} onClick={() => onKind(k.id)} />
+            ))}
+            <Separator className="col-span-3 my-1" />
+            <KindRow label="Total" add={add} del={del} />
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+      {ms != null && <span>{ms.toFixed(0)} ms</span>}
     </span>
   )
 }
@@ -199,6 +241,7 @@ export function Toolbar({
   pr,
   unsent,
   onSendToGitHub,
+  onKind,
   children,
 }: {
   source?: Source
@@ -218,6 +261,8 @@ export function Toolbar({
   pr?: PullRequest
   unsent: number
   onSendToGitHub?: () => Promise<string>
+  /** Filters the file tree to one kind of change. */
+  onKind: (kind: Kind) => void
   /** Extra controls, placed before "Open diff". */
   children?: ReactNode
 }) {
@@ -243,7 +288,7 @@ export function Toolbar({
       )}
 
       <div className="ml-auto flex items-center gap-1.5">
-        <Stats entries={entries} viewed={viewed} ms={ms} />
+        <Stats entries={entries} viewed={viewed} ms={ms} onKind={onKind} />
         <ReviewActions
           count={comments}
           onCopy={onCopyReview}

@@ -9,8 +9,7 @@ import { useHotkey } from '@/hooks/use-hotkey'
 import { useLatest } from '@/hooks/use-latest'
 import { ICON_PACKS, type Prefs } from '@/hooks/use-prefs'
 import type { Entry } from '@/lib/diff'
-import { diffstat } from '@/lib/insights'
-import { matches } from '@/lib/match'
+import { diffstat, fileMatches } from '@/lib/insights'
 import { MOD } from '@/lib/shortcut'
 
 const STATUS = {
@@ -104,7 +103,7 @@ export const Sidebar = memo(function Sidebar({
   })
 
   const shown = useMemo(
-    () => (filter.trim() ? entries.filter((e) => matches(e.file.name, filter.trim())) : entries),
+    () => (filter.trim() ? entries.filter((e) => fileMatches(e, filter)) : entries),
     [entries, filter],
   )
 
@@ -145,7 +144,7 @@ export const Sidebar = memo(function Sidebar({
           <InputGroupInput
             ref={input}
             value={filter}
-            placeholder="Filter files"
+            placeholder="Filter files, or is:tests"
             aria-label="Filter files"
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => {

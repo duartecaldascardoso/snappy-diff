@@ -1,4 +1,5 @@
 import type { Entry } from '@/lib/diff'
+import { matches } from '@/lib/match'
 import type { Moves } from '@/lib/moved'
 
 export type Kind = 'code' | 'tests' | 'config' | 'ci' | 'docs' | 'generated'
@@ -45,6 +46,30 @@ export function diffstat(add: number, del: number, max: number) {
   if (add && !green && filled > 1) green = 1
   if (del && green === filled && filled > 1) green--
   return { add: green, del: filled - green, empty: STAT_BOXES - filled }
+}
+
+/** Added and removed lines per kind, in KINDS order, leaving out kinds with no changes. */
+export function breakdown(entries: Entry[]) {
+  const by = new Map<Kind, { add: number; del: number }>()
+  for (const e of entries) {
+    const k = by.get(kindOf(e)) ?? { add: 0, del: 0 }
+    k.add += e.add
+    k.del += e.del
+    by.set(kindOf(e), k)
+  }
+  return KINDS.flatMap((k) => (by.has(k.id) ? [{ ...k, ...by.get(k.id)! }] : []))
+}
+
+/**
+ * Whether a file passes the file filter: every term must match its path, except
+ * `is:<kind>` terms (`is:tests`, `is:code`…), which match its kind.
+ */
+export function fileMatches(e: Entry, filter: string) {
+  return filter
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((term) => (term.startsWith('is:') ? kindOf(e) === term.slice(3).toLowerCase() : matches(e.file.name, term)))
 }
 
 export type Area = { path: string; name: string; add: number; del: number; files: number; viewed: number; deeper: boolean }

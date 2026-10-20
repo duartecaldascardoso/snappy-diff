@@ -23,8 +23,7 @@ import { type Entry, fetchChurn, fileLoader, type Source, WORKTREE } from '@/lib
 import { firstChange, openInEditor } from '@/lib/editor'
 import { sendReview } from '@/lib/github'
 import { fontFamily } from '@/lib/fonts'
-import { reviewOrder } from '@/lib/insights'
-import { matches } from '@/lib/match'
+import { fileMatches, type Kind, reviewOrder } from '@/lib/insights'
 import { findMoves } from '@/lib/moved'
 import { reviewPrompt } from '@/lib/review'
 import { cn } from '@/lib/utils'
@@ -100,7 +99,7 @@ export default function App() {
 
   // Moving between files keeps to what the file filter shows.
   const visible = useMemo(
-    () => (filter.trim() ? entries.filter((e) => matches(e.file.name, filter.trim())) : entries),
+    () => (filter.trim() ? entries.filter((e) => fileMatches(e, filter)) : entries),
     [entries, filter],
   )
   const step = (by: number) => {
@@ -201,6 +200,10 @@ export default function App() {
           onToggleAll={toggleAll}
           onCopyReview={copyForAI}
           onClearComments={clearComments}
+          onKind={(kind: Kind) => {
+            setFilter(`is:${kind}`)
+            if (sidebar === 'closed') setSidebar('open')
+          }}
           pr={pr}
           unsent={unsent.length}
           onSendToGitHub={sendToGitHub}
