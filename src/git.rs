@@ -127,6 +127,21 @@ pub async fn commits(repo: &Path, base: &str, head: &str) -> Vec<Commit> {
         .collect()
 }
 
+/// How many commits in `base..head` touched each file.
+pub async fn churn(repo: &Path, base: &str, head: &str) -> std::collections::HashMap<String, u32> {
+    let mut counts = std::collections::HashMap::new();
+    if base.starts_with('-') || head.starts_with('-') {
+        return counts;
+    }
+    let range = format!("{base}..{head}");
+    if let Ok(out) = run(repo, &["log", "--format=", "--name-only", "--max-count=500", &range, "--"]).await {
+        for path in String::from_utf8_lossy(&out).lines().filter(|l| !l.is_empty()) {
+            *counts.entry(path.to_string()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
 /// What a single commit changed (against its first parent for merges).
 pub async fn show(repo: &Path, sha: &str, ignore_whitespace: bool) -> Result<Vec<u8>, String> {
     if sha.starts_with('-') {

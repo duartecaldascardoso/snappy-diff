@@ -27,10 +27,21 @@
   --deleted: oklch(0.6 0.2 25);
   /* Native controls (select popups, scrollbars) follow the mode too. */
   color-scheme: light;
+  /* Change kinds in the overview: categorical slots in fixed order. */
+  --kind-code: #2a78d6;
+  --kind-tests: #eb6834;
+  --kind-config: #1baf7a;
+  --kind-ci: #eda100;
+  --kind-docs: #e87ba4;
 }
 
 .dark {
   color-scheme: dark;
+  --kind-code: #3987e5;
+  --kind-tests: #d95926;
+  --kind-config: #199e70;
+  --kind-ci: #c98500;
+  --kind-docs: #d55181;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --muted: oklch(0.205 0 0);
@@ -68,6 +79,11 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-kind-code: var(--kind-code);
+  --color-kind-tests: var(--kind-tests);
+  --color-kind-config: var(--kind-config);
+  --color-kind-ci: var(--kind-ci);
+  --color-kind-docs: var(--kind-docs);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

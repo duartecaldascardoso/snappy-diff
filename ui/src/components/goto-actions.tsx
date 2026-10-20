@@ -1,4 +1,5 @@
 import {
+  ChartNoAxesColumn,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleCheck,
@@ -47,6 +48,8 @@ type Context = {
     toggleWrap: () => void
     reload: () => void
     openFile: () => void
+    reviewNext: () => void
+    openOverview: () => void
     /** Absent without a repository. */
     openInEditor?: () => void
     /** Absent unless reviewing a pull request with comments to post. */
@@ -59,6 +62,8 @@ type Context = {
 export function gotoActions(c: Context): Action[] {
   const git = c.ignoreWhitespace != null
   const actions: (Action | false)[] = [
+    { id: 'review-next', label: 'Review next file', icon: <StepForward />, keys: ['N'], words: 'suggested order', run: c.do.reviewNext },
+    { id: 'overview', label: 'Overview', icon: <ChartNoAxesColumn />, words: 'stats areas effort summary', run: c.do.openOverview },
     { id: 'next', label: 'Next file', icon: <StepForward />, keys: ['J'], run: c.do.next },
     { id: 'previous', label: 'Previous file', icon: <StepBack />, keys: ['K'], run: c.do.previous },
     { id: 'viewed', label: 'Mark file as viewed', icon: <CircleCheck />, keys: ['V'], run: c.do.toggleViewed },

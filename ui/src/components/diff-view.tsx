@@ -20,8 +20,24 @@ import type { Prefs } from '@/hooks/use-prefs'
 import { type Entry, hash } from '@/lib/diff'
 import { EDITORS } from '@/lib/editor'
 import { linesText } from '@/lib/lines'
+import { isMoved, type Moves } from '@/lib/moved'
 import type { Comment } from '@/lib/review'
 import type { Theme } from '@/lib/themes'
+
+const MOVED_CSS = `[data-line][data-moved] { opacity: 0.45; }`
+
+/** Marks the rendered lines of one file that were only moved. */
+function tagMoved(node: HTMLElement, file: string, moves: Moves) {
+  if (!moves.perFile.has(file)) return
+  const root = node.shadowRoot ?? node
+  for (const line of root.querySelectorAll<HTMLElement>('[data-line]')) {
+    const side =
+      line.closest('[data-deletions]') || (!line.closest('[data-additions]') && line.dataset.lineType?.includes('deletion'))
+        ? 'deletions'
+        : 'additions'
+    line.toggleAttribute('data-moved', isMoved(moves, file, side, Number(line.dataset.line)))
+  }
+}
 
 export type DiffViewHandle = {
   scrollToFile: (id: string) => void
@@ -45,6 +61,7 @@ export function DiffView({
   dark,
   loadFiles,
   onOpen,
+  moves,
 }: {
   ref: Ref<DiffViewHandle>
   /** Changes when a different diff is shown, which starts back at the top. */
@@ -63,9 +80,14 @@ export function DiffView({
   loadFiles?: FileDiffContentsLoader
   /** Opens a file in the editor; absent when there is no repository. */
   onOpen?: (e: Entry) => void
+  moves: Moves
 }) {
   const view = useRef<CodeViewHandle<Note, undefined>>(null)
   const scroller = useRef<HTMLDivElement>(null)
+  const movesRef = useRef(moves)
+  useEffect(() => {
+    movesRef.current = moves
+  }, [moves])
   const [editing, setEditing] = useState<Comment | null>(null)
   // The file whose header has scrolled out of view, shown pinned instead.
   const [pinned, setPinned] = useState<number | null>(null)
@@ -157,6 +179,10 @@ export function DiffView({
       // Off: CSS-sticky headers inside the virtualized list lag in Firefox.
       // PinnedHeader takes their place.
       stickyHeaders: false,
+      // Moved code needs little reading: fade it (lines are tagged in onPostRender).
+      unsafeCSS: MOVED_CSS,
+      onPostRender: (node: HTMLElement, _instance: unknown, _phase: unknown, { item }: { item: CodeViewItem<Note> }) =>
+        tagMoved(node, item.id, movesRef.current),
       // The gutter's + button (drag it for a range) starts a comment.
       enableGutterUtility: true,
       onGutterUtilityClick: (range: SelectedLineRange, { item }: { item: CodeViewItem<Note> }) =>
@@ -233,6 +259,11 @@ export function DiffView({
               <EditorLogo editor={prefs.editor} className="size-3.5" />
             </button>
           )}
+          {(moves.perFile.get(e.id) ?? 0) > 0 && (
+            <span className="text-muted-foreground" title="Lines that were moved, not changed: they need little reading">
+              {moves.perFile.get(e.id)} moved
+            </span>
+          )}
           {count > 0 && (
             <span className="flex items-center gap-1 text-muted-foreground">
               <MessageSquare className="size-3.5" />
@@ -246,7 +277,7 @@ export function DiffView({
         </span>
       )
     },
-    [byId, isViewed, onToggleViewed, onOpen, prefs.editor],
+    [byId, isViewed, onToggleViewed, onOpen, prefs.editor, moves],
   )
 
   const closeEditor = useCallback(() => {

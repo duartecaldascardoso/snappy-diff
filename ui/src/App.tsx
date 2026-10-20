@@ -1,9 +1,12 @@
 import { WorkerPoolContextProvider } from '@pierre/diffs/react'
 import DiffWorker from '@pierre/diffs/worker/worker.js?worker'
-import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react'
+import { ChartNoAxesColumn } from 'lucide-react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DiffView, type DiffViewHandle } from '@/components/diff-view'
 import { EmptyState } from '@/components/empty-state'
 import { GoTo, type GoToKind } from '@/components/goto'
+import { Overview } from '@/components/overview'
+import { Button } from '@/components/ui/button'
 import { gotoActions } from '@/components/goto-actions'
 import { Settings } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
@@ -16,10 +19,13 @@ import { usePersisted } from '@/hooks/use-persisted'
 import { usePrefs } from '@/hooks/use-prefs'
 import { useReview } from '@/hooks/use-review'
 import { useAppearance } from '@/hooks/use-appearance'
-import { type Entry, fileLoader, type Source, WORKTREE } from '@/lib/diff'
+import { type Entry, fetchChurn, fileLoader, type Source, WORKTREE } from '@/lib/diff'
 import { firstChange, openInEditor } from '@/lib/editor'
 import { sendReview } from '@/lib/github'
 import { fontFamily } from '@/lib/fonts'
+import { reviewOrder } from '@/lib/insights'
+import { matches } from '@/lib/match'
+import { findMoves } from '@/lib/moved'
 import { reviewPrompt } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
@@ -54,6 +60,16 @@ export default function App() {
   const [highlighter] = useState(() => ({ theme: { light: theme.light, dark: theme.dark } }))
   const [goto, setGoto] = useState<GoToKind | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [overviewOpen, setOverviewOpen] = useState(false)
+  const [filter, setFilter] = useState('')
+  const [churn, setChurn] = useState(new Map<string, number>())
+  // Moved code, found once per diff.
+  const moves = useMemo(() => findMoves(entries), [entries])
+
+  // Commit counts per file only matter for the overview; fetch them when it opens.
+  useEffect(() => {
+    if (overviewOpen && source?.kind === 'git') fetchChurn(source).then(setChurn)
+  }, [overviewOpen, source])
   const view = useRef<DiffViewHandle>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -82,10 +98,24 @@ export default function App() {
     [flipViewed, reset],
   )
 
+  // Moving between files keeps to what the file filter shows.
+  const visible = useMemo(
+    () => (filter.trim() ? entries.filter((e) => matches(e.file.name, filter.trim())) : entries),
+    [entries, filter],
+  )
   const step = (by: number) => {
-    const next = entries[active + by]
+    const index = new Map(entries.map((e, i) => [e.id, i]))
+    const next =
+      by > 0 ? visible.find((e) => index.get(e.id)! > active) : visible.findLast((e) => index.get(e.id)! < active)
     if (next) jumpToFile(next.id)
   }
+  // The most important file you haven't viewed: contracts, tests, code, config, docs.
+  const reviewNext = () => {
+    const pending = reviewOrder(visible).filter((e) => !isViewed(e))
+    const next = pending.find((e) => e.id !== entries[active]?.id) ?? pending[0]
+    if (next) jumpToFile(next.id)
+  }
+
   const toggleViewedActive = () => {
     const e = entries[active]
     if (!e) return
@@ -134,6 +164,8 @@ export default function App() {
         toggleWrap: () => setPref('wrap', !prefs.wrap),
         reload: () => source && load(source),
         openFile: openFilePicker,
+      reviewNext,
+      openOverview: () => setOverviewOpen(true),
       openInEditor: openFile && entries[active] ? () => openFile(entries[active]) : undefined,
       sendToGitHub: sendToGitHub && unsent.length ? () => void sendToGitHub() : undefined,
         openSettings: () => setSettingsOpen(true),
@@ -145,6 +177,7 @@ export default function App() {
   useHotkey('mod+f', () => setGoto('lines'))
   useHotkey('?', () => setSettingsOpen((o) => !o))
   useHotkey('o', () => entries[active] && openFile?.(entries[active]))
+  useHotkey('n', reviewNext)
   useHotkey('j', () => step(1))
   useHotkey('k', () => step(-1))
   useHotkey('mod+b', toggleSidebar)
@@ -172,6 +205,15 @@ export default function App() {
           unsent={unsent.length}
           onSendToGitHub={sendToGitHub}
         >
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Overview: where the changes are and what to review"
+            disabled={!entries.length}
+            onClick={() => setOverviewOpen(true)}
+          >
+            <ChartNoAxesColumn />
+          </Button>
           <Settings
             prefs={prefs}
             setPref={setPref}
@@ -189,6 +231,8 @@ export default function App() {
               entries={entries}
               activePath={entries[active]?.file.name}
               icons={prefs.icons}
+              filter={filter}
+              onFilterChange={setFilter}
               onSelect={jumpToFile}
               onGoTo={() => setGoto('all')}
             />
@@ -212,6 +256,7 @@ export default function App() {
                 dark={dark}
                 loadFiles={loadFiles}
                 onOpen={openFile}
+                moves={moves}
               />
             ) : (
               <div className="flex h-full items-center justify-center p-6">
@@ -221,6 +266,20 @@ export default function App() {
           </main>
         </div>
 
+        <Overview
+          open={overviewOpen}
+          onOpenChange={setOverviewOpen}
+          entries={entries}
+          isViewed={isViewed}
+          moves={moves}
+          churn={churn}
+          onFile={jumpToFile}
+          onFilter={(prefix) => {
+            setFilter(prefix)
+            if (sidebar === 'closed') setSidebar('open')
+          }}
+          onReviewNext={entries.some((e) => !isViewed(e)) ? reviewNext : undefined}
+        />
         <GoTo
           open={goto}
           onOpenChange={setGoto}

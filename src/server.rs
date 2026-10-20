@@ -91,6 +91,7 @@ pub fn router(app: App) -> Router {
         .route("/api/meta", get(meta))
         .route("/api/diff", get(diff))
         .route("/api/commits", get(commits))
+        .route("/api/churn", get(churn))
         .route("/api/blob/{oid}", get(blob))
         .route("/api/file", get(file))
         // JSON only: a cross-site page can't send that without a CORS preflight we never allow.
@@ -155,6 +156,13 @@ async fn commits(State(app): State<Arc<App>>, Query(range): Query<Range>) -> Jso
     match (&app.repo, range.base, range.head) {
         (Some(repo), Some(base), Some(head)) if !head.is_empty() => Json(git::commits(repo, &base, &head).await),
         _ => Json(Vec::new()),
+    }
+}
+
+async fn churn(State(app): State<Arc<App>>, Query(range): Query<Range>) -> Json<std::collections::HashMap<String, u32>> {
+    match (&app.repo, range.base, range.head) {
+        (Some(repo), Some(base), Some(head)) if !head.is_empty() => Json(git::churn(repo, &base, &head).await),
+        _ => Json(Default::default()),
     }
 }
 

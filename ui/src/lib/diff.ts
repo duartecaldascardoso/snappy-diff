@@ -65,6 +65,13 @@ export async function fetchPatch(source: Source): Promise<string> {
   return text
 }
 
+/** How many commits of the range touched each file. */
+export async function fetchChurn(s: GitSource): Promise<Map<string, number>> {
+  if (s.head === WORKTREE) return new Map()
+  const res = await fetch(`/api/churn?${new URLSearchParams({ base: s.base, head: s.head })}`)
+  return new Map(Object.entries(res.ok ? await res.json() : {}))
+}
+
 export async function fetchCommits(s: GitSource): Promise<Commit[]> {
   if (s.head === WORKTREE) return []
   const res = await fetch(`/api/commits?${new URLSearchParams({ base: s.base, head: s.head })}`)

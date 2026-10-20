@@ -15,6 +15,7 @@ import { BUNDLED_FONTS, installedFonts } from '@/lib/fonts'
 import { THEMES } from '@/lib/themes'
 
 const SHORTCUTS = [
+  [['n'], 'Review next file'],
   [['j', 'k'], 'Next / previous file'],
   [['v'], 'Mark file as viewed'],
   [['o'], 'Open file in editor'],
