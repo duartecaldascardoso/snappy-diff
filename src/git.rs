@@ -106,23 +106,38 @@ pub struct Commit {
     subject: String,
     author: String,
     date: String,
+    /// Lines added and removed (text files only).
+    add: u32,
+    del: u32,
 }
 
-/// Commits in `base..head`, newest first.
+/// Commits in `base..head`, newest first, with their size.
 pub async fn commits(repo: &Path, base: &str, head: &str) -> Vec<Commit> {
     if base.starts_with('-') || head.starts_with('-') {
         return Vec::new();
     }
     let range = format!("{base}..{head}");
-    let format = "--format=%H%x1f%s%x1f%an%x1f%ar";
-    let Ok(out) = run(repo, &["log", format, "--max-count=500", &range, "--"]).await else {
+    // Each commit starts with a record separator, then its numstat lines follow.
+    let format = "--format=%x1e%H%x1f%s%x1f%an%x1f%ar";
+    let Ok(out) = run(repo, &["log", format, "--numstat", "--max-count=500", &range, "--"]).await else {
         return Vec::new();
     };
     String::from_utf8_lossy(&out)
-        .lines()
-        .filter_map(|line| {
-            let mut f = line.split('\x1f').map(str::to_owned);
-            Some(Commit { sha: f.next()?, subject: f.next()?, author: f.next()?, date: f.next()? })
+        .split('\x1e')
+        .filter_map(|record| {
+            let mut lines = record.lines();
+            let mut f = lines.next()?.split('\x1f').map(str::to_owned);
+            let mut commit =
+                Commit { sha: f.next()?, subject: f.next()?, author: f.next()?, date: f.next()?, add: 0, del: 0 };
+            for stat in lines {
+                let mut cols = stat.split('\t');
+                // Binary files show "-" and don't count.
+                if let (Some(Ok(a)), Some(Ok(d))) = (cols.next().map(str::parse::<u32>), cols.next().map(str::parse::<u32>)) {
+                    commit.add += a;
+                    commit.del += d;
+                }
+            }
+            Some(commit)
         })
         .collect()
 }

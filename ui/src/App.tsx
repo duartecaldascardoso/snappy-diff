@@ -34,6 +34,10 @@ const POOL = {
   poolSize: Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)),
 }
 
+/** What is under review, as a heading shows it. */
+const titleOf = (s?: Source) =>
+  s?.kind !== 'git' ? (s?.name ?? '') : `${s.base}...${s.head || 'working tree'}${s.commit ? ` @ ${s.commit.slice(0, 7)}` : ''}`
+
 /** How the prompt for an AI agent names what was reviewed. */
 const subjectOf = (s?: Source) =>
   s?.kind !== 'git'
@@ -272,13 +276,18 @@ export default function App() {
         <Overview
           open={overviewOpen}
           onOpenChange={setOverviewOpen}
+          subject={titleOf(source)}
+          commits={source?.kind === 'git' ? commits : []}
+          commit={source?.kind === 'git' ? source.commit : undefined}
+          comments={comments}
+          onCommit={source?.kind === 'git' ? (commit) => load({ ...source, commit }) : undefined}
           entries={entries}
           isViewed={isViewed}
           moves={moves}
           churn={churn}
           onFile={jumpToFile}
-          onFilter={(prefix) => {
-            setFilter(prefix)
+          onFilter={(next) => {
+            setFilter(next)
             if (sidebar === 'closed') setSidebar('open')
           }}
           onReviewNext={entries.some((e) => !isViewed(e)) ? reviewNext : undefined}

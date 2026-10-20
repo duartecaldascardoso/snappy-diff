@@ -9,7 +9,7 @@ export type Meta = {
   canOpen: boolean
 }
 
-export type Commit = { sha: string; subject: string; author: string; date: string }
+export type Commit = { sha: string; subject: string; author: string; date: string; add: number; del: number }
 
 /** As a head, compares against uncommitted changes instead of a ref. */
 export const WORKTREE = ''
