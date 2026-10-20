@@ -7,6 +7,8 @@ import { EmptyState } from '@/components/empty-state'
 import { GoTo, type GoToKind } from '@/components/goto'
 import { Overview } from '@/components/overview'
 import { Button } from '@/components/ui/button'
+import { Toaster } from '@/components/ui/sonner'
+import { toast } from 'sonner'
 import { gotoActions } from '@/components/goto-actions'
 import { Settings } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
@@ -14,6 +16,7 @@ import { Toolbar } from '@/components/toolbar'
 import { useCollapsed } from '@/hooks/use-collapsed'
 import { useDiff } from '@/hooks/use-diff'
 import { useHotkey } from '@/hooks/use-hotkey'
+import { useLastReview } from '@/hooks/use-last-review'
 import { usePatchInput } from '@/hooks/use-patch-input'
 import { usePersisted } from '@/hooks/use-persisted'
 import { usePrefs } from '@/hooks/use-prefs'
@@ -50,8 +53,18 @@ const subjectOf = (s?: Source) =>
 
 export default function App() {
   const { source, key, refs, commits, canOpen, pr, entries, loading, error, ms, load } = useDiff()
-  const review = useReview(key, entries)
-  const { isViewed, toggleViewed: flipViewed, comments, active: activeComments, markSent, clearComments } = review
+  const reviewState = useReview(key, entries)
+  const { since: newSinceReview, markReviewed } = useLastReview(source, source?.kind === 'git' ? commits : [])
+  // Reviewing anything (a viewed mark, a comment) remembers the branch tip you reviewed.
+  const { saveComment: storeComment } = reviewState
+  const saveComment = useCallback(
+    (c: Parameters<typeof storeComment>[0]) => {
+      markReviewed()
+      storeComment(c)
+    },
+    [storeComment, markReviewed],
+  )
+  const { isViewed, toggleViewed: flipViewed, comments, active: activeComments, markSent, clearComments } = reviewState
   // Viewed, generated and huge files start collapsed.
   const byDefault = useCallback((e: Entry) => isViewed(e) || e.generated || e.large, [isViewed])
   const { collapsed, allCollapsed, toggle, expand, reset, toggleAll } = useCollapsed(key, entries, byDefault)
@@ -68,6 +81,21 @@ export default function App() {
   const [churn, setChurn] = useState(new Map<string, number>())
   // Moved code, found once per diff.
   const moves = useMemo(() => findMoves(entries), [entries])
+
+  // When a refresh shows commented code changed (an agent at work, say), say so.
+  const outdated = useRef<{ key: string; ids: Set<string> } | null>(null)
+  useEffect(() => {
+    const ids = new Set(comments.filter((c) => c.outdated).map((c) => c.id))
+    const before = outdated.current
+    outdated.current = { key, ids }
+    if (!before || before.key !== key || !entries.length) return
+    const fresh = [...ids].filter((id) => !before.ids.has(id)).length
+    if (fresh)
+      toast(`${fresh} ${fresh === 1 ? 'comment' : 'comments'} addressed`, {
+        description: 'The code they were on has changed. Resolve them, or keep them.',
+        action: { label: 'Show', onClick: () => setGoto('comments') },
+      })
+  }, [comments, key, entries])
 
   // Commit counts per file only matter for the overview; fetch them when it opens.
   useEffect(() => {
@@ -97,8 +125,9 @@ export default function App() {
     (e: Entry) => {
       flipViewed(e)
       reset(e.id)
+      markReviewed()
     },
-    [flipViewed, reset],
+    [flipViewed, reset, markReviewed],
   )
 
   // Moving between files keeps to what the file filter shows.
@@ -194,7 +223,7 @@ export default function App() {
           refs={refs}
           commits={commits}
           entries={entries}
-          viewed={review.viewedCount}
+          viewed={reviewState.viewedCount}
           comments={activeComments.length}
           ms={ms}
           onLoad={load}
@@ -204,6 +233,7 @@ export default function App() {
           onToggleAll={toggleAll}
           onCopyReview={copyForAI}
           onClearComments={clearComments}
+          newSinceReview={newSinceReview}
           onKind={(kind: Kind) => {
             setFilter(`is:${kind}`)
             if (sidebar === 'closed') setSidebar('open')
@@ -256,7 +286,7 @@ export default function App() {
                 collapsed={collapsed}
                 onToggle={toggle}
                 onActiveChange={setActive}
-                review={review}
+                review={{ ...reviewState, saveComment }}
                 onToggleViewed={toggleViewed}
                 prefs={prefs}
                 theme={theme}
@@ -323,6 +353,7 @@ export default function App() {
             if (file) openPatch(file.name, await file.text())
           }}
         />
+        <Toaster dark={dark} position="bottom-right" />
         {dragging && (
           <div className="pointer-events-none fixed inset-2 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-ring bg-background/80 text-sm">
             Drop a diff to view it

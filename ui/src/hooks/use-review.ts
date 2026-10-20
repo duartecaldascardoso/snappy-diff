@@ -21,6 +21,8 @@ export function useReview(key: string, entries: Entry[]) {
   const active = useMemo(() => comments.filter((c) => !c.outdated), [comments])
 
   const isViewed = useCallback((e: Entry) => review.viewed[e.id] === e.signature, [review.viewed])
+  // Marked viewed once, but the file has changed since: worth another look.
+  const changedSinceViewed = useCallback((e: Entry) => e.id in review.viewed && review.viewed[e.id] !== e.signature, [review.viewed])
   const viewedCount = useMemo(() => entries.filter(isViewed).length, [entries, isViewed])
 
   const toggleViewed = useCallback(
@@ -53,7 +55,7 @@ export function useReview(key: string, entries: Entry[]) {
 
   const clearComments = useCallback(() => update((r) => ({ ...r, comments: [] })), [update])
 
-  return { comments, active, isViewed, viewedCount, toggleViewed, saveComment, deleteComment, markSent, clearComments }
+  return { comments, active, isViewed, changedSinceViewed, viewedCount, toggleViewed, saveComment, deleteComment, markSent, clearComments }
 }
 
 export type ReviewState = ReturnType<typeof useReview>

@@ -79,6 +79,8 @@ struct Range {
     w: Option<String>,
     /// Show just this commit.
     commit: Option<String>,
+    /// Show only what changed since this commit (your last review), instead of since `base`.
+    since: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -137,6 +139,7 @@ async fn diff(State(app): State<Arc<App>>, Query(range): Query<Range>) -> Respon
 
 async fn patch(app: &App, range: Range) -> Result<Vec<u8>, String> {
     let ignore_whitespace = range.w.is_some();
+    let range = Range { base: range.since.clone().or(range.base), ..range };
     match (range, &app.repo, &app.patch) {
         (Range { commit: Some(sha), .. }, Some(repo), _) => git::show(repo, &sha, ignore_whitespace).await,
         (Range { base: Some(base), head: Some(head), .. }, Some(repo), _) if head.is_empty() => {

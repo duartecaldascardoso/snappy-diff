@@ -132,7 +132,7 @@ export function DiffView({
   }, [pool, theme])
 
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries])
-  const { comments, isViewed, saveComment: save, deleteComment } = review
+  const { comments, isViewed, changedSinceViewed, saveComment: save, deleteComment } = review
   // Saving anchors a comment to the code it is on now, which it then follows.
   const saveComment = useCallback(
     (c: Comment) => {
@@ -236,10 +236,23 @@ export function DiffView({
   const renderHeaderFilenameSuffix = useCallback(
     (item: CodeViewItem<Note>) => {
       const e = byId.get(item.id)
-      const label = e?.generated ? 'generated' : e?.large ? 'large' : null
-      return label && <span className="ml-2 rounded-sm bg-muted px-1.5 py-px text-[11px] text-muted-foreground">{label}</span>
+      if (!e) return null
+      const label = e.generated ? 'generated' : e.large ? 'large' : null
+      return (
+        <>
+          {label && <span className="ml-2 rounded-sm bg-muted px-1.5 py-px text-[11px] text-muted-foreground">{label}</span>}
+          {changedSinceViewed(e) && (
+            <span
+              className="ml-2 rounded-sm border px-1.5 py-px text-[11px] text-muted-foreground"
+              title="You marked this file viewed, but it has changed since"
+            >
+              changed since viewed
+            </span>
+          )}
+        </>
+      )
     },
-    [byId],
+    [byId, changedSinceViewed],
   )
 
   const renderHeaderMetadata = useCallback(

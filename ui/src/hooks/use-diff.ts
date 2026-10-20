@@ -69,6 +69,7 @@ export function useDiff() {
             base: params.get('base') ?? meta.base,
             head: params.get('head') ?? meta.head,
             commit: params.get('commit') ?? undefined,
+            since: params.get('since') ?? undefined,
             ignoreWhitespace: params.has('w'),
           }
           load(first)

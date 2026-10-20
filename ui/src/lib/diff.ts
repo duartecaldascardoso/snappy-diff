@@ -20,6 +20,8 @@ export type GitSource = {
   head: string
   /** Narrows the range to this one commit. */
   commit?: string
+  /** Shows only what changed since this commit: the head you last reviewed. */
+  since?: string
   ignoreWhitespace?: boolean
 }
 
@@ -49,6 +51,7 @@ export const gitQuery = (s: Source) => {
   if (s.kind !== 'git') return ''
   const params = new URLSearchParams({ base: s.base, head: s.head })
   if (s.commit) params.set('commit', s.commit)
+  if (s.since) params.set('since', s.since)
   if (s.ignoreWhitespace) params.set('w', '1')
   return `?${params}`
 }
@@ -88,10 +91,16 @@ export function hash(text: string) {
   return h >>> 0
 }
 
-const signatureOf = (file: FileDiffMetadata) =>
-  file.prevObjectId || file.newObjectId
-    ? `${file.prevObjectId}..${file.newObjectId}`
-    : hash(file.deletionLines.join('') + '\0' + file.additionLines.join('')).toString(36)
+/**
+ * What a file is now, whatever it is compared against: so marking it viewed
+ * holds across ranges (full or "since your review") and resets only when the
+ * file itself changes.
+ */
+const signatureOf = (file: FileDiffMetadata) => {
+  if (exists(file.newObjectId)) return file.newObjectId
+  if (exists(file.prevObjectId)) return `deleted:${file.prevObjectId}`
+  return hash(file.deletionLines.join('') + '\0' + file.additionLines.join('')).toString(36)
+}
 
 /**
  * `rev` identifies the load. Files unchanged since `previous` keep their old

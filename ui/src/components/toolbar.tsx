@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Check, ChevronsDownUp, ChevronsUpDown, FileUp, PanelLeft, Pilcrow, RotateCw, Sparkles, X, GitPullRequest } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronsDownUp, ChevronsUpDown, FileUp, PanelLeft, Pilcrow, RotateCw, Sparkles, X, GitPullRequest, History } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { GithubIcon } from '@/components/github-icon'
 import { Picker } from '@/components/picker'
@@ -47,7 +47,7 @@ function RefPicker({
         aria-label="Base"
         value={source.base}
         groups={options(all)}
-        onChange={(base) => onLoad({ ...source, base, commit: undefined })}
+        onChange={(base) => onLoad({ ...source, base, commit: undefined, since: undefined })}
         className="font-mono"
       />
       <Button
@@ -55,7 +55,7 @@ function RefPicker({
         size="icon-sm"
         title="Swap base and head"
         disabled={source.head === WORKTREE}
-        onClick={() => onLoad({ ...source, base: source.head, head: source.base, commit: undefined })}
+        onClick={() => onLoad({ ...source, base: source.head, head: source.base, commit: undefined, since: undefined })}
       >
         <ArrowLeftRight />
       </Button>
@@ -63,7 +63,7 @@ function RefPicker({
         aria-label="Head"
         value={source.head}
         groups={heads}
-        onChange={(head) => onLoad({ ...source, head, commit: undefined })}
+        onChange={(head) => onLoad({ ...source, head, commit: undefined, since: undefined })}
         className="font-mono"
       />
       {commits.length > 1 && (
@@ -71,7 +71,7 @@ function RefPicker({
           aria-label="Commit"
           value={source.commit ?? ''}
           groups={commitGroups}
-          onChange={(sha) => onLoad({ ...source, commit: sha || undefined })}
+          onChange={(sha) => onLoad({ ...source, commit: sha || undefined, since: undefined })}
           className="max-w-64"
         />
       )}
@@ -242,6 +242,7 @@ export function Toolbar({
   unsent,
   onSendToGitHub,
   onKind,
+  newSinceReview,
   children,
 }: {
   source?: Source
@@ -263,6 +264,8 @@ export function Toolbar({
   onSendToGitHub?: () => Promise<string>
   /** Filters the file tree to one kind of change. */
   onKind: (kind: Kind) => void
+  /** New commits on top of the tip you last reviewed, if any. */
+  newSinceReview: { sha: string; count: number } | null
   /** Extra controls, placed before "Open diff". */
   children?: ReactNode
 }) {
@@ -274,6 +277,33 @@ export function Toolbar({
       <span className="mr-1 text-sm font-semibold tracking-tight whitespace-nowrap">snappy diff</span>
 
       {source?.kind === 'git' && <RefPicker source={source} refs={refs} commits={commits} onLoad={onLoad} />}
+      {source?.kind === 'git' &&
+        (source.since ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-xs"
+            title="Showing only what changed since your last review; click to show everything"
+            onClick={() => onLoad({ ...source, since: undefined })}
+          >
+            <History />
+            Since your review
+            <X className="text-muted-foreground" />
+          </Button>
+        ) : (
+          newSinceReview && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              title="Show only what changed since you last reviewed this branch"
+              onClick={() => onLoad({ ...source, since: newSinceReview.sha, commit: undefined })}
+            >
+              <History />
+              {newSinceReview.count} new {newSinceReview.count === 1 ? 'commit' : 'commits'} since your review
+            </Button>
+          )
+        ))}
       {pr && (
         <Button variant="ghost" size="sm" asChild className="min-w-0 text-xs text-muted-foreground">
           <a href={pr.url} target="_blank" rel="noreferrer" title={`Open #${pr.number} on GitHub`}>
