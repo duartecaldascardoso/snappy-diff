@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Entry } from '@/lib/diff'
-import { type Comment, EMPTY_REVIEW, readReview, type Review, writeReview } from '@/lib/review'
+import { type Comment, EMPTY_REVIEW, readReview, relocate, type Review, writeReview } from '@/lib/review'
 
 /** Viewed files and comments for the diff identified by `key`, kept in localStorage. */
 export function useReview(key: string, entries: Entry[]) {
@@ -15,6 +15,10 @@ export function useReview(key: string, entries: Entry[]) {
     (change: (review: Review) => Review) => setState((s) => ({ key: s.key, review: change(s.review) })),
     [],
   )
+
+  // Where each comment's code is now; derived, so the stored anchor stays the source of truth.
+  const comments = useMemo(() => relocate(review.comments, entries), [review.comments, entries])
+  const active = useMemo(() => comments.filter((c) => !c.outdated), [comments])
 
   const isViewed = useCallback((e: Entry) => review.viewed[e.id] === e.signature, [review.viewed])
   const viewedCount = useMemo(() => entries.filter(isViewed).length, [entries, isViewed])
@@ -43,7 +47,7 @@ export function useReview(key: string, entries: Entry[]) {
 
   const clearComments = useCallback(() => update((r) => ({ ...r, comments: [] })), [update])
 
-  return { comments: review.comments, isViewed, viewedCount, toggleViewed, saveComment, deleteComment, clearComments }
+  return { comments, active, isViewed, viewedCount, toggleViewed, saveComment, deleteComment, clearComments }
 }
 
 export type ReviewState = ReturnType<typeof useReview>

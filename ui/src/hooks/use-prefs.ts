@@ -1,5 +1,6 @@
 import type { FileTreeIcons } from '@pierre/trees'
 import { useCallback, useEffect, useState } from 'react'
+import type { EditorId } from '@/lib/editor'
 
 /** The file tree's built-in icon sets, plain or colored by file type. */
 export const ICON_PACKS = {
@@ -20,9 +21,11 @@ export type Prefs = {
   /** Syntax theme family, see THEMES. */
   theme: string
   icons: keyof typeof ICON_PACKS
+  /** Where "open in editor" goes. */
+  editor: EditorId
 }
 
-const DEFAULTS: Prefs = { diffStyle: 'split', wrap: true, fullFiles: false, font: '', theme: 'Pierre', icons: 'standard-colored' }
+const DEFAULTS: Prefs = { diffStyle: 'split', wrap: true, fullFiles: false, font: '', theme: 'Pierre', icons: 'standard-colored', editor: 'vscode' }
 
 function read(): Prefs {
   try {

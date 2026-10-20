@@ -1,11 +1,11 @@
 mod git;
+mod open;
 mod server;
 
 use std::{
     io::Read,
     net::{Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
-    process::Stdio,
 };
 
 use clap::Parser;
@@ -54,22 +54,6 @@ fn read_patch(args: &[String]) -> std::io::Result<Option<(String, String)>> {
     }
 }
 
-fn open_browser(url: &str) {
-    let (cmd, args): (&str, &[&str]) = if cfg!(target_os = "macos") {
-        ("open", &[])
-    } else if cfg!(target_os = "windows") {
-        ("cmd", &["/C", "start", ""])
-    } else {
-        ("xdg-open", &[])
-    };
-    let _ = std::process::Command::new(cmd)
-        .args(args)
-        .arg(url)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -98,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let url = format!("http://localhost:{}", listener.local_addr()?.port());
     println!("snappy-diff → {url}");
     if !cli.no_open {
-        open_browser(&url);
+        open::open(&url);
     }
 
     axum::serve(listener, server::router(server::App { repo, patch, base, head })).await?;

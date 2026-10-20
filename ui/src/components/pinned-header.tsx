@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, SquareArrowOutUpRight } from 'lucide-react'
 import { FileIcon } from '@/components/file-icon'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { Entry } from '@/lib/diff'
@@ -16,11 +16,13 @@ export function PinnedHeader({
   viewed,
   onCollapse,
   onToggleViewed,
+  onOpen,
 }: {
   entry: Entry
   viewed: boolean
   onCollapse: () => void
   onToggleViewed: () => void
+  onOpen?: () => void
 }) {
   return (
     <div
@@ -38,6 +40,16 @@ export function PinnedHeader({
       <FileIcon type={entry.file.type} className="size-4 text-muted-foreground" />
       <span className="min-w-0 truncate">{entry.file.name}</span>
       <span className="ml-auto flex shrink-0 items-center gap-3 text-xs">
+        {onOpen && (
+          <button
+            type="button"
+            title="Open in editor (o)"
+            onClick={onOpen}
+            className="inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <SquareArrowOutUpRight className="size-3.5" />
+          </button>
+        )}
         <span className="tabular-nums">
           <span className="text-deleted">−{entry.del}</span> <span className="text-added">+{entry.add}</span>
         </span>

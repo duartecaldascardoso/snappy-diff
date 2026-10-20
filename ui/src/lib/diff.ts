@@ -6,6 +6,7 @@ export type Meta = {
   base: string
   head: string
   patchName: string | null
+  canOpen: boolean
 }
 
 export type Commit = { sha: string; subject: string; author: string; date: string }

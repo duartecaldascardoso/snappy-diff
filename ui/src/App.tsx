@@ -3,7 +3,7 @@ import DiffWorker from '@pierre/diffs/worker/worker.js?worker'
 import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react'
 import { DiffView, type DiffViewHandle } from '@/components/diff-view'
 import { EmptyState } from '@/components/empty-state'
-import { GoTo } from '@/components/goto'
+import { GoTo, type GoToKind } from '@/components/goto'
 import { gotoActions } from '@/components/goto-actions'
 import { Settings } from '@/components/settings'
 import { Sidebar } from '@/components/sidebar'
@@ -17,6 +17,7 @@ import { usePrefs } from '@/hooks/use-prefs'
 import { useReview } from '@/hooks/use-review'
 import { useAppearance } from '@/hooks/use-appearance'
 import { type Entry, fileLoader, type Source, WORKTREE } from '@/lib/diff'
+import { firstChange, openInEditor } from '@/lib/editor'
 import { fontFamily } from '@/lib/fonts'
 import { reviewPrompt } from '@/lib/review'
 import { cn } from '@/lib/utils'
@@ -38,9 +39,9 @@ const subjectOf = (s?: Source) =>
         : `the changes in \`${s.base}...${s.head}\``
 
 export default function App() {
-  const { source, key, refs, commits, entries, loading, error, ms, load } = useDiff()
+  const { source, key, refs, commits, canOpen, entries, loading, error, ms, load } = useDiff()
   const review = useReview(key, entries)
-  const { isViewed, toggleViewed: flipViewed, comments, clearComments } = review
+  const { isViewed, toggleViewed: flipViewed, comments, active: activeComments, clearComments } = review
   // Viewed, generated and huge files start collapsed.
   const byDefault = useCallback((e: Entry) => isViewed(e) || e.generated || e.large, [isViewed])
   const { collapsed, allCollapsed, toggle, expand, reset, toggleAll } = useCollapsed(key, entries, byDefault)
@@ -50,7 +51,7 @@ export default function App() {
   const { dark, toggleDark, theme } = useAppearance(prefs.theme)
   // The worker pool is created once, warmed up with the theme in use at startup.
   const [highlighter] = useState(() => ({ theme: { light: theme.light, dark: theme.dark } }))
-  const [gotoOpen, setGotoOpen] = useState(false)
+  const [goto, setGoto] = useState<GoToKind | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const view = useRef<DiffViewHandle>(null)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -91,6 +92,13 @@ export default function App() {
     // Marking a file viewed moves on to the next one.
     if (!isViewed(e)) step(1)
   }
+  const openFile = useMemo(
+    () =>
+      canOpen
+        ? (e: Entry) => e.file.type !== 'deleted' && openInEditor(prefs.editor, e.file.name, firstChange(e.file))
+        : undefined,
+    [canOpen, prefs.editor],
+  )
   const copyForAI = () => navigator.clipboard.writeText(reviewPrompt(subjectOf(source), comments, entries))
 
   // Built only while the menu is open: App re-renders on every scroll.
@@ -100,7 +108,7 @@ export default function App() {
       dark,
       sidebarOpen: sidebar === 'open',
       allCollapsed,
-      hasComments: comments.length > 0,
+      hasComments: activeComments.length > 0,
       ignoreWhitespace: source?.kind === 'git' ? !!source.ignoreWhitespace : undefined,
       canShowFullFiles: !!loadFiles,
       do: {
@@ -117,12 +125,16 @@ export default function App() {
         toggleWrap: () => setPref('wrap', !prefs.wrap),
         reload: () => source && load(source),
         openFile: openFilePicker,
+      openInEditor: openFile && entries[active] ? () => openFile(entries[active]) : undefined,
         openSettings: () => setSettingsOpen(true),
       },
     })
 
-  useHotkey('mod+k', () => setGotoOpen((o) => !o))
+  useHotkey('mod+k', () => setGoto((g) => (g ? null : 'all')))
+  // The browser's find can't see rows the virtualized diff hasn't drawn; search them all instead.
+  useHotkey('mod+f', () => setGoto('lines'))
   useHotkey('?', () => setSettingsOpen((o) => !o))
+  useHotkey('o', () => entries[active] && openFile?.(entries[active]))
   useHotkey('j', () => step(1))
   useHotkey('k', () => step(-1))
   useHotkey('mod+b', toggleSidebar)
@@ -137,7 +149,7 @@ export default function App() {
           commits={commits}
           entries={entries}
           viewed={review.viewedCount}
-          comments={comments.length}
+          comments={activeComments.length}
           ms={ms}
           onLoad={load}
           onOpen={openFilePicker}
@@ -165,7 +177,7 @@ export default function App() {
               activePath={entries[active]?.file.name}
               icons={prefs.icons}
               onSelect={jumpToFile}
-              onGoTo={() => setGotoOpen(true)}
+              onGoTo={() => setGoto('all')}
             />
           </aside>
           <main
@@ -186,6 +198,7 @@ export default function App() {
                 theme={theme}
                 dark={dark}
                 loadFiles={loadFiles}
+                onOpen={openFile}
               />
             ) : (
               <div className="flex h-full items-center justify-center p-6">
@@ -196,8 +209,8 @@ export default function App() {
         </div>
 
         <GoTo
-          open={gotoOpen}
-          onOpenChange={setGotoOpen}
+          open={goto}
+          onOpenChange={setGoto}
           reviewKey={key}
           entries={entries}
           commits={source?.kind === 'git' ? commits : []}
@@ -209,6 +222,10 @@ export default function App() {
           onComment={(c) => {
             expand(c.file)
             view.current?.scrollToLine(c.file, c.end, c.side)
+          }}
+          onLine={(file, line, side) => {
+            expand(file)
+            view.current?.scrollToLine(file, line, side)
           }}
         />
         <input

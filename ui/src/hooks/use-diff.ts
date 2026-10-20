@@ -26,6 +26,7 @@ const REFRESH_MS = 1500
 
 export function useDiff() {
   const [refs, setRefs] = useState<string[]>([])
+  const [canOpen, setCanOpen] = useState(false)
   const [commits, setCommits] = useState<Commit[]>([])
   const [state, setState] = useState<State>({ key: '', entries: [], loading: true })
   const request = useRef(0)
@@ -56,6 +57,7 @@ export function useDiff() {
       .then((r) => r.json())
       .then((meta: Meta) => {
         setRefs(meta.refs)
+        setCanOpen(meta.canOpen)
         const params = new URLSearchParams(location.search)
         if (meta.mode === 'patch') load({ kind: 'patch', name: meta.patchName ?? 'patch' })
         else if (meta.mode === 'git')
@@ -101,5 +103,5 @@ export function useDiff() {
     }
   }, [source, loading])
 
-  return { ...state, refs, commits, load }
+  return { ...state, refs, commits, canOpen, load }
 }

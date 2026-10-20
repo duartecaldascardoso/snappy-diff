@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import {
@@ -9,6 +10,7 @@ import {
   InputGroupTextarea,
 } from '@/components/ui/input-group'
 import type { Comment } from '@/lib/review'
+import { cn } from '@/lib/utils'
 
 const lines = (c: Comment) => (c.start === c.end ? `Line ${c.end}` : `Lines ${c.start}–${c.end}`)
 
@@ -16,22 +18,41 @@ export function CommentCard({
   comment,
   onEdit,
   onDelete,
+  onKeep,
 }: {
   comment: Comment
   onEdit: () => void
   onDelete: () => void
+  /** Re-anchors an outdated comment to the code now on its lines. */
+  onKeep: () => void
 }) {
   return (
-    <Card className="m-2 max-w-3xl gap-1 py-2 font-sans text-[13px]">
+    <Card className={cn('m-2 max-w-3xl gap-1 py-2 font-sans text-[13px]', comment.outdated && 'opacity-75')}>
       <CardHeader className="items-center gap-0 px-3">
-        <CardDescription className="text-xs">{lines(comment)}</CardDescription>
+        <CardDescription className="flex items-center gap-2 text-xs">
+          {lines(comment)}
+          {comment.outdated && <Badge variant="secondary">Code changed</Badge>}
+        </CardDescription>
         <CardAction>
-          <Button variant="ghost" size="xs" onClick={onEdit}>
-            Edit
-          </Button>
-          <Button variant="ghost" size="xs" onClick={onDelete}>
-            Delete
-          </Button>
+          {comment.outdated ? (
+            <>
+              <Button variant="ghost" size="xs" onClick={onKeep}>
+                Keep
+              </Button>
+              <Button variant="ghost" size="xs" onClick={onDelete}>
+                Resolve
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="xs" onClick={onEdit}>
+                Edit
+              </Button>
+              <Button variant="ghost" size="xs" onClick={onDelete}>
+                Delete
+              </Button>
+            </>
+          )}
         </CardAction>
       </CardHeader>
       <CardContent className="px-3 whitespace-pre-wrap">{comment.text}</CardContent>

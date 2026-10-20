@@ -2,7 +2,7 @@
 //! and keeps the binary free of a bundled git implementation.
 
 use std::{
-    path::{Component, Path},
+    path::{Component, Path, PathBuf},
     process::Stdio,
 };
 
@@ -177,13 +177,16 @@ pub async fn untracked_patch(repo: &Path) -> Vec<u8> {
     patch
 }
 
+/// `path` inside the repository, refusing anything that would step outside it.
+pub fn repo_path(repo: &Path, path: &str) -> Option<PathBuf> {
+    let relative = Path::new(path);
+    relative.components().all(|c| matches!(c, Component::Normal(_))).then(|| repo.join(relative))
+}
+
 /// A file as it currently is on disk; uncommitted contents have no blob yet.
 pub async fn worktree_file(repo: &Path, path: &str) -> Result<Vec<u8>, String> {
-    let relative = Path::new(path);
-    if !relative.components().all(|c| matches!(c, Component::Normal(_))) {
-        return Err("invalid path".into());
-    }
-    tokio::fs::read(repo.join(relative)).await.map_err(|e| e.to_string())
+    let file = repo_path(repo, path).ok_or("invalid path")?;
+    tokio::fs::read(file).await.map_err(|e| e.to_string())
 }
 
 pub async fn blob(repo: &Path, oid: &str) -> Result<Vec<u8>, String> {
@@ -191,4 +194,18 @@ pub async fn blob(repo: &Path, oid: &str) -> Result<Vec<u8>, String> {
         return Err("invalid object id".into());
     }
     run(repo, &["cat-file", "blob", oid]).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repo_paths_stay_inside() {
+        let repo = Path::new("/repo");
+        assert_eq!(repo_path(repo, "src/a.rs"), Some(PathBuf::from("/repo/src/a.rs")));
+        assert_eq!(repo_path(repo, "../etc/passwd"), None);
+        assert_eq!(repo_path(repo, "/etc/passwd"), None);
+        assert_eq!(repo_path(repo, "src/../../x"), None);
+    }
 }

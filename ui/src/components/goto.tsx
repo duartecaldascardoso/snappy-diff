@@ -1,16 +1,21 @@
 import { Command as CommandPrimitive } from 'cmdk'
-import { GitCommitHorizontal, History, Layers, MessageSquare, X } from 'lucide-react'
-import { type KeyboardEvent, type ReactNode, useMemo, useState } from 'react'
+import { Equal, GitCommitHorizontal, History, Layers, MessageSquare, Minus, Plus, X } from 'lucide-react'
+import { type KeyboardEvent, type ReactNode, useDeferredValue, useMemo, useState } from 'react'
 import { FileIcon } from '@/components/file-icon'
 import { FootKey, Row, Section, TypeTab } from '@/components/goto/parts'
 import { Keys } from '@/components/keys'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { Commit, Entry } from '@/lib/diff'
 import { recentFiles, rememberFile } from '@/lib/recents'
+import { diffLines, type Line } from '@/lib/lines'
 import { matches } from '@/lib/match'
 import type { Comment } from '@/lib/review'
 
-type Kind = 'all' | 'files' | 'commits' | 'comments' | 'actions'
+export type GoToKind = 'all' | 'files' | 'lines' | 'commits' | 'comments' | 'actions'
+type Kind = GoToKind
+
+/** Most matching lines listed at once; past that, the query should be sharper. */
+const LINE_LIMIT = 200
 
 /** Something to do from the menu, with the shortcut that does it outside. */
 export type Action = { id: string; label: string; icon: ReactNode; keys?: string[]; words?: string; run: () => void }
@@ -49,9 +54,11 @@ export function GoTo({
   onFile,
   onCommit,
   onComment,
+  onLine,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  /** The tab it is open on, or null when closed. */
+  open: Kind | null
+  onOpenChange: (open: Kind | null) => void
   reviewKey: string
   entries: Entry[]
   /** The range's commits; empty when there is nothing to pick from. */
@@ -64,13 +71,16 @@ export function GoTo({
   onFile: (id: string) => void
   onCommit: (sha?: string) => void
   onComment: (comment: Comment) => void
+  onLine: (file: string, line: number, side: Line['side']) => void
 }) {
   const [query, setQuery] = useState('')
-  const [kind, setKind] = useState<Kind>('all')
+  const kind = open ?? 'all'
+  const setKind = (next: Kind) => onOpenChange(next)
 
   const kinds: { id: Kind; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'files', label: 'Files' },
+    { id: 'lines', label: 'Lines' },
     ...(commits.length > 1 ? [{ id: 'commits' as const, label: 'Commits' }] : []),
     ...(comments.length ? [{ id: 'comments' as const, label: 'Comments' }] : []),
     { id: 'actions', label: 'Actions' },
@@ -84,12 +94,25 @@ export function GoTo({
   )
 
   const change = (next: boolean) => {
-    onOpenChange(next)
-    if (!next) {
-      setQuery('')
-      setKind('all')
-    }
+    onOpenChange(next ? kind : null)
+    if (!next) setQuery('')
   }
+
+  // Every line of the diff, indexed once per diff and only while the menu is open.
+  const lines = useMemo(
+    () => (open ? entries.flatMap((e) => diffLines(e.file).map((line) => ({ e, line }))) : []),
+    [open, entries],
+  )
+  // Typing stays instant; on huge diffs the search catches up a frame later.
+  const search = useDeferredValue(query.trim())
+  const lineMatches = useMemo(() => {
+    if ((kind !== 'lines' && kind !== 'all') || search.length < (kind === 'lines' ? 2 : 3)) return []
+    const limit = kind === 'lines' ? LINE_LIMIT : 20
+    const out: typeof lines = []
+    for (const hit of lines) if (matches(hit.line.text, search) && out.push(hit) >= limit) break
+    return out
+  }, [lines, search, kind])
+  const waitingForLines = kind === 'lines' && search.length < 2
   const act = (run: () => void) => {
     change(false)
     run()
@@ -129,7 +152,7 @@ export function GoTo({
   }
 
   return (
-    <Dialog open={open} onOpenChange={change}>
+    <Dialog open={open != null} onOpenChange={change}>
       <DialogHeader className="sr-only">
         <DialogTitle>Go to</DialogTitle>
         <DialogDescription>A file, a commit, a comment or something to do</DialogDescription>
@@ -170,14 +193,34 @@ export function GoTo({
             ))}
           </div>
           <CommandPrimitive.List className="max-h-[min(56vh,30rem)] overflow-y-auto overscroll-contain px-2 pb-1">
-            <CommandPrimitive.Empty className="py-10 text-center text-sm text-muted-foreground">
-              Nothing by that name.
-            </CommandPrimitive.Empty>
+            {!waitingForLines && (
+              <CommandPrimitive.Empty className="py-10 text-center text-sm text-muted-foreground">
+                Nothing by that name.
+              </CommandPrimitive.Empty>
+            )}
             {kind === 'all' && !query && recents.length > 0 && (
               <Section heading="Recent">{recents.map((e) => fileRow(e, `recent ${e.file.name}`))}</Section>
             )}
             {shows('files') && entries.length > 0 && (
               <Section heading="Files">{entries.map((e) => fileRow(e, `file ${e.file.name}`))}</Section>
+            )}
+            {lineMatches.length > 0 && (
+              <Section heading="Lines">
+                {lineMatches.map(({ e, line }) => (
+                  <Row
+                    key={`${e.id}:${line.side}:${line.n}`}
+                    value={`line ${line.text} ${e.file.name}`}
+                    onSelect={() => act(() => onLine(e.id, line.n, line.side))}
+                    icon={!line.changed ? <Equal /> : line.side === 'additions' ? <Plus /> : <Minus />}
+                    aside={<span className="max-w-56 truncate font-mono">{`${split(e.file.name).name}:${line.n}`}</span>}
+                  >
+                    <span className="font-mono text-[13px]">{line.text.trim()}</span>
+                  </Row>
+                ))}
+              </Section>
+            )}
+            {waitingForLines && (
+              <p className="py-10 text-center text-sm text-muted-foreground">Search the code in this diff.</p>
             )}
             {shows('commits') && commits.length > 1 && (
               <Section heading="Commits">

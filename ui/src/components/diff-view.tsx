@@ -8,14 +8,16 @@ import {
   type LineAnnotation,
   useWorkerPool,
 } from '@pierre/diffs/react'
-import { ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare, SquareArrowOutUpRight } from 'lucide-react'
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { CommentCard, CommentEditor } from '@/components/comment'
 import { HEADER_HEIGHT, PinnedHeader } from '@/components/pinned-header'
+import { type LineRange, SelectionComment } from '@/components/selection-comment'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { ReviewState } from '@/hooks/use-review'
 import type { Prefs } from '@/hooks/use-prefs'
 import { type Entry, hash } from '@/lib/diff'
+import { linesText } from '@/lib/lines'
 import type { Comment } from '@/lib/review'
 import type { Theme } from '@/lib/themes'
 
@@ -40,6 +42,7 @@ export function DiffView({
   theme,
   dark,
   loadFiles,
+  onOpen,
 }: {
   ref: Ref<DiffViewHandle>
   /** Changes when a different diff is shown, which starts back at the top. */
@@ -56,8 +59,11 @@ export function DiffView({
   dark: boolean
   /** Fetches full files so folded lines can be expanded. */
   loadFiles?: FileDiffContentsLoader
+  /** Opens a file in the editor; absent when there is no repository. */
+  onOpen?: (e: Entry) => void
 }) {
   const view = useRef<CodeViewHandle<Note, undefined>>(null)
+  const scroller = useRef<HTMLDivElement>(null)
   const [editing, setEditing] = useState<Comment | null>(null)
   // The file whose header has scrolled out of view, shown pinned instead.
   const [pinned, setPinned] = useState<number | null>(null)
@@ -102,7 +108,15 @@ export function DiffView({
   }, [pool, theme])
 
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries])
-  const { comments, isViewed, saveComment, deleteComment } = review
+  const { comments, isViewed, saveComment: save, deleteComment } = review
+  // Saving anchors a comment to the code it is on now, which it then follows.
+  const saveComment = useCallback(
+    (c: Comment) => {
+      const file = byId.get(c.file)?.file
+      save({ ...c, code: (file && linesText(file, c.side, c.start, c.end)) ?? undefined, outdated: undefined })
+    },
+    [byId, save],
+  )
 
   const items = useMemo<CodeViewItem<Note>[]>(() => {
     const byFile = Map.groupBy(comments, (c) => c.file)
@@ -125,6 +139,8 @@ export function DiffView({
     })
   }, [entries, collapsed, comments, editing, isViewed])
 
+  const startComment = useCallback((range: LineRange) => setEditing({ id: crypto.randomUUID(), text: '', ...range }), [])
+
   const options = useMemo(
     () => ({
       theme: { light: theme.light, dark: theme.dark },
@@ -140,16 +156,14 @@ export function DiffView({
       // The gutter's + button (drag it for a range) starts a comment.
       enableGutterUtility: true,
       onGutterUtilityClick: (range: SelectedLineRange, { item }: { item: CodeViewItem<Note> }) =>
-        setEditing({
-          id: crypto.randomUUID(),
+        startComment({
           file: item.id,
           side: range.endSide ?? range.side ?? 'additions',
           start: Math.min(range.start, range.end),
           end: Math.max(range.start, range.end),
-          text: '',
         }),
     }),
-    [theme, dark, prefs.diffStyle, prefs.wrap, prefs.fullFiles, loadFiles],
+    [theme, dark, prefs.diffStyle, prefs.wrap, prefs.fullFiles, loadFiles, startComment],
   )
 
   const onScroll = useCallback(
@@ -178,6 +192,8 @@ export function DiffView({
       <button
         type="button"
         aria-label={item.collapsed ? 'Expand file' : 'Collapse file'}
+        // Lets a text selection inside the diff find which file it is in.
+        data-file={item.id}
         onClick={() => onToggle(item.id)}
         className="mr-1 inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       >
@@ -203,6 +219,16 @@ export function DiffView({
       const count = item.annotations?.length ?? 0
       return (
         <span className="flex items-center gap-3 font-sans text-xs">
+          {onOpen && e.file.type !== 'deleted' && (
+            <button
+              type="button"
+              title="Open in editor (o)"
+              onClick={() => onOpen(e)}
+              className="inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            >
+              <SquareArrowOutUpRight className="size-3.5" />
+            </button>
+          )}
           {count > 0 && (
             <span className="flex items-center gap-1 text-muted-foreground">
               <MessageSquare className="size-3.5" />
@@ -216,7 +242,7 @@ export function DiffView({
         </span>
       )
     },
-    [byId, isViewed, onToggleViewed],
+    [byId, isViewed, onToggleViewed, onOpen],
   )
 
   const closeEditor = useCallback(() => {
@@ -238,7 +264,12 @@ export function DiffView({
           onCancel={closeEditor}
         />
       ) : (
-        <CommentCard comment={comment} onEdit={() => setEditing(comment)} onDelete={() => deleteComment(comment.id)} />
+        <CommentCard
+          comment={comment}
+          onEdit={() => setEditing(comment)}
+          onDelete={() => deleteComment(comment.id)}
+          onKeep={() => saveComment(comment)}
+        />
       )
     },
     [saveComment, deleteComment, closeEditor],
@@ -254,10 +285,13 @@ export function DiffView({
           viewed={isViewed(pinnedEntry)}
           onCollapse={() => onToggle(pinnedEntry.id)}
           onToggleViewed={() => onToggleViewed(pinnedEntry)}
+          onOpen={onOpen && pinnedEntry.file.type !== 'deleted' ? () => onOpen(pinnedEntry) : undefined}
         />
       )}
+      <SelectionComment container={scroller} onComment={startComment} />
       <CodeView
         ref={view}
+        containerRef={scroller}
         items={items}
         options={options}
         onScroll={onScroll}

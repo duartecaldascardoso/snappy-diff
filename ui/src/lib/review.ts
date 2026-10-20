@@ -1,5 +1,6 @@
-import type { AnnotationSide, FileDiffMetadata } from '@pierre/diffs'
+import type { AnnotationSide } from '@pierre/diffs'
 import type { Entry } from '@/lib/diff'
+import { linesText, sideLines } from '@/lib/lines'
 
 export type Comment = {
   id: string
@@ -9,6 +10,10 @@ export type Comment = {
   start: number
   end: number
   text: string
+  /** The commented lines as they read when the comment was left: its anchor. */
+  code?: string
+  /** Set when that code is no longer in the diff, most likely because it was addressed. */
+  outdated?: boolean
 }
 
 export type Review = {
@@ -37,22 +42,31 @@ export function writeReview(key: string, review: Review) {
   else localStorage.setItem(storageKey(key), JSON.stringify(review))
 }
 
-/** The text of line `n` on one side, if the diff contains it. */
-function lineText(file: FileDiffMetadata, side: AnnotationSide, n: number) {
-  const lines = side === 'additions' ? file.additionLines : file.deletionLines
-  if (!file.isPartial) return lines[n - 1]
-  for (const h of file.hunks) {
-    const [start, count, index] =
-      side === 'additions'
-        ? [h.additionStart, h.additionCount, h.additionLineIndex]
-        : [h.deletionStart, h.deletionCount, h.deletionLineIndex]
-    if (n >= start && n < start + count) return lines[index + n - start]
-  }
-}
-
-const codeOf = (file: FileDiffMetadata, c: Comment) => {
-  const lines = Array.from({ length: c.end - c.start + 1 }, (_, i) => lineText(file, c.side, c.start + i))
-  return lines.every((l) => l != null) ? lines.map((l) => l!.replace(/\r?\n$/, '')).join('\n') : null
+/**
+ * Moves comments to follow the code they were left on, so they survive edits
+ * (an agent's, say) and live refreshes. A comment whose lines still read the
+ * same stays; one whose code moved goes with it, to the nearest match; one
+ * whose code is gone is marked outdated.
+ */
+export function relocate(comments: Comment[], entries: Entry[]): Comment[] {
+  if (!entries.length) return comments
+  const files = new Map(entries.map((e) => [e.id, e.file]))
+  return comments.map((c) => {
+    if (c.code == null) return c
+    const file = files.get(c.file)
+    if (!file) return { ...c, outdated: true }
+    if (linesText(file, c.side, c.start, c.end) === c.code) return { ...c, outdated: false }
+    const lines = sideLines(file, c.side)
+    const want = c.code.split('\n')
+    let best: number | null = null
+    for (const n of lines.keys()) {
+      if (!want.every((text, i) => lines.get(n + i) === text)) continue
+      if (best == null || Math.abs(n - c.start) < Math.abs(best - c.start)) best = n
+    }
+    return best == null
+      ? { ...c, outdated: true }
+      : { ...c, start: best, end: best + want.length - 1, outdated: false }
+  })
 }
 
 /**
@@ -63,7 +77,8 @@ const codeOf = (file: FileDiffMetadata, c: Comment) => {
 export function reviewPrompt(subject: string, comments: Comment[], entries: Entry[]) {
   const order = new Map(entries.map((e, i) => [e.id, i]))
   const files = new Map(entries.map((e) => [e.id, e.file]))
-  const sorted = comments.toSorted((a, b) => (order.get(a.file) ?? 0) - (order.get(b.file) ?? 0) || a.end - b.end)
+  // Outdated comments were most likely addressed already.
+  const sorted = comments.filter((c) => !c.outdated).toSorted((a, b) => (order.get(a.file) ?? 0) - (order.get(b.file) ?? 0) || a.end - b.end)
   const out = [
     `Please address these review comments on ${subject}.`,
     'Each one gives the file and lines, the code it refers to, and what to change.',
@@ -74,7 +89,7 @@ export function reviewPrompt(subject: string, comments: Comment[], entries: Entr
     const lines = c.start === c.end ? `${c.end}` : `${c.start}-${c.end}`
     const removed = c.side === 'deletions' ? ' (removed lines; numbers are from before the change)' : ''
     out.push('', `${i + 1}. \`${path}:${lines}\`${removed}`)
-    const code = file && codeOf(file, c)
+    const code = file && linesText(file, c.side, c.start, c.end)
     if (code) out.push('```' + path.split('.').pop(), code, '```')
     out.push(c.text)
   })

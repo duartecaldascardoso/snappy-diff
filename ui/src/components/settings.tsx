@@ -9,12 +9,16 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ICON_PACKS, type Prefs, type SetPref } from '@/hooks/use-prefs'
+import { EDITORS, type EditorId } from '@/lib/editor'
 import { BUNDLED_FONTS, installedFonts } from '@/lib/fonts'
 import { THEMES } from '@/lib/themes'
 
 const SHORTCUTS = [
   [['j', 'k'], 'Next / previous file'],
   [['v'], 'Mark file as viewed'],
+  [['o'], 'Open file in editor'],
+  [['c'], 'Comment on selected code'],
+  [['⌘', 'F'], 'Search the code'],
   [['⌘', 'K'], 'Go to a file, commit or action'],
   [['/'], 'Filter the file tree'],
   [['⌘', 'B'], 'Toggle sidebar'],
@@ -134,6 +138,15 @@ export function Settings({
             value={prefs.icons}
             groups={[{ options: Object.entries(ICON_PACKS).map(([value, { label }]) => ({ value, label })) }]}
             onChange={(v) => setPref('icons', v as Prefs['icons'])}
+            className={CONTROL}
+          />
+        </Row>
+        <Row label="Editor">
+          <Picker
+            aria-label="Editor"
+            value={prefs.editor}
+            groups={[{ options: Object.entries(EDITORS).map(([value, label]) => ({ value, label })) }]}
+            onChange={(v) => setPref('editor', v as EditorId)}
             className={CONTROL}
           />
         </Row>

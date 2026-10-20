@@ -12,6 +12,7 @@ import {
   Rows2,
   Settings2,
   Sparkles,
+  SquareArrowOutUpRight,
   StepBack,
   StepForward,
   Sun,
@@ -44,6 +45,8 @@ type Context = {
     toggleWrap: () => void
     reload: () => void
     openFile: () => void
+    /** Absent without a repository. */
+    openInEditor?: () => void
     openSettings: () => void
   }
 }
@@ -55,6 +58,14 @@ export function gotoActions(c: Context): Action[] {
     { id: 'next', label: 'Next file', icon: <StepForward />, keys: ['J'], run: c.do.next },
     { id: 'previous', label: 'Previous file', icon: <StepBack />, keys: ['K'], run: c.do.previous },
     { id: 'viewed', label: 'Mark file as viewed', icon: <CircleCheck />, keys: ['V'], run: c.do.toggleViewed },
+    !!c.do.openInEditor && {
+      id: 'editor',
+      label: 'Open file in editor',
+      icon: <SquareArrowOutUpRight />,
+      keys: ['O'],
+      words: 'vscode cursor zed',
+      run: c.do.openInEditor,
+    },
     c.hasComments && { id: 'ai', label: 'Copy comments for AI', icon: <Sparkles />, words: 'review prompt clipboard', run: c.do.copyForAI },
     {
       id: 'collapse',

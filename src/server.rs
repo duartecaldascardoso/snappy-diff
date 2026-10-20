@@ -6,13 +6,13 @@ use axum::{
     extract::{Path, Query, State},
     http::{header, StatusCode, Uri},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 
-use crate::git;
+use crate::{git, open};
 
 #[derive(RustEmbed)]
 #[folder = "ui/dist"]
@@ -38,6 +38,15 @@ struct Meta {
     base: String,
     head: String,
     patch_name: Option<String>,
+    /// Whether files can be opened in an editor (we are in a repository).
+    can_open: bool,
+}
+
+#[derive(Deserialize)]
+struct OpenRequest {
+    editor: String,
+    path: String,
+    line: u32,
 }
 
 #[derive(Deserialize)]
@@ -63,6 +72,8 @@ pub fn router(app: App) -> Router {
         .route("/api/commits", get(commits))
         .route("/api/blob/{oid}", get(blob))
         .route("/api/file", get(file))
+        // JSON only: a cross-site page can't send that without a CORS preflight we never allow.
+        .route("/api/open", post(open_in_editor))
         .fallback(asset)
         .with_state(Arc::new(app))
 }
@@ -87,6 +98,7 @@ async fn meta(State(app): State<Arc<App>>) -> Json<Meta> {
         base: app.base.clone(),
         head: app.head.clone(),
         patch_name: app.patch.as_ref().map(|(name, _)| name.clone()),
+        can_open: app.repo.is_some(),
     })
 }
 
@@ -141,6 +153,22 @@ async fn file(State(app): State<Arc<App>>, Query(FilePath { path }): Query<FileP
     match git::worktree_file(repo, &path).await {
         Ok(contents) => text(StatusCode::OK, contents),
         Err(e) => text(StatusCode::NOT_FOUND, e),
+    }
+}
+
+async fn open_in_editor(State(app): State<Arc<App>>, Json(req): Json<OpenRequest>) -> Response {
+    let Some(repo) = &app.repo else {
+        return text(StatusCode::NOT_FOUND, "not a git repository");
+    };
+    let Some(file) = git::repo_path(repo, &req.path) else {
+        return text(StatusCode::BAD_REQUEST, "invalid path");
+    };
+    match open::editor_url(&req.editor, &file, req.line.max(1)) {
+        Some(url) => {
+            open::open(&url);
+            text(StatusCode::OK, "")
+        }
+        None => text(StatusCode::BAD_REQUEST, "unknown editor"),
     }
 }
 
